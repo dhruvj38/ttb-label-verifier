@@ -17,6 +17,20 @@ test('sample label runs through real same-origin OCR', async ({ page }) => {
   ).toBeVisible()
   await page.getByRole('button', { name: 'Try sample label' }).click()
   await expect(page.getByLabel('Brand name')).toHaveValue('OLD TOM DISTILLERY')
+  const netContents = page.getByLabel('Net contents')
+  await netContents.fill('garbage 750 mL')
+  await expect(netContents).toHaveAttribute('aria-invalid', 'true')
+  await expect(
+    page.getByText('Enter a positive number followed by mL, L, or fl oz.'),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Analyze label' }),
+  ).toBeDisabled()
+  await netContents.fill('750 mL')
+  await expect(netContents).not.toHaveAttribute('aria-invalid')
+  await expect(
+    page.getByRole('button', { name: 'Analyze label' }),
+  ).toBeEnabled()
   await page.getByRole('button', { name: 'Analyze label' }).click()
 
   await expect(

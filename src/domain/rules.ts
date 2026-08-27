@@ -17,9 +17,10 @@ function identityCheck(
   key: 'brand' | 'classType',
   label: string,
   expected: string,
+  otherExpectedIdentity: string,
   text: string,
 ): CheckResult {
-  const evidence = findIdentityEvidence(text, expected)
+  const evidence = findIdentityEvidence(text, expected, [otherExpectedIdentity])
 
   if (evidence.similarity === 1 && evidence.ambiguousContinuation) {
     return {
@@ -29,7 +30,7 @@ function identityCheck(
       expected,
       observed: evidence.text,
       reason:
-        'One OCR line matches, but adjacent text with the same casing may continue the identity. Review the complete label name.',
+        'One OCR line matches, but adjacent text may continue the identity. Review the complete label name.',
     }
   }
 
@@ -164,8 +165,14 @@ export function evaluateLabel(
   confidence: number,
 ): CheckResult[] {
   return [
-    identityCheck('brand', 'Brand name', values.brand, text),
-    identityCheck('classType', 'Class / type', values.classType, text),
+    identityCheck('brand', 'Brand name', values.brand, values.classType, text),
+    identityCheck(
+      'classType',
+      'Class / type',
+      values.classType,
+      values.brand,
+      text,
+    ),
     numericCheck(
       'abv',
       'Alcohol by volume',

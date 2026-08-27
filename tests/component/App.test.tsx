@@ -195,6 +195,52 @@ describe('App', () => {
     expect(engine.recognize).not.toHaveBeenCalled()
   })
 
+  it('identifies malformed net contents and accepts a complete supported value', async () => {
+    const user = userEvent.setup()
+    const engine = mockEngine()
+    render(<App ocrEngine={engine} />)
+    await addValidFile(user)
+    await user.type(screen.getByLabelText('Brand name'), 'OLD TOM DISTILLERY')
+    await user.type(
+      screen.getByLabelText('Class / type'),
+      'Kentucky Straight Bourbon Whiskey',
+    )
+    await user.type(screen.getByLabelText('Alcohol by volume'), '45')
+    await user.type(screen.getByLabelText('Net contents'), 'garbage 750 mL')
+
+    const netContents = screen.getByLabelText('Net contents')
+    expect(netContents).toHaveAttribute('aria-invalid', 'true')
+    expect(netContents).toHaveAccessibleDescription(
+      'Enter a positive number followed by mL, L, or fl oz.',
+    )
+    expect(screen.getByRole('button', { name: 'Analyze label' })).toBeDisabled()
+    expect(engine.recognize).not.toHaveBeenCalled()
+
+    await user.clear(netContents)
+    await user.type(netContents, '0.75 L')
+    expect(netContents).not.toHaveAttribute('aria-invalid')
+    expect(screen.getByRole('button', { name: 'Analyze label' })).toBeEnabled()
+    await user.click(screen.getByRole('button', { name: 'Analyze label' }))
+    await waitFor(() => expect(engine.recognize).toHaveBeenCalledTimes(1))
+  })
+
+  it('blocks retry when net contents becomes invalid', async () => {
+    const user = userEvent.setup()
+    const engine = mockEngine({
+      recognize: vi.fn().mockRejectedValue(new Error('Unreadable image')),
+    })
+    render(<App ocrEngine={engine} />)
+    await addValidFile(user)
+    await completeFields(user)
+    await user.click(screen.getByRole('button', { name: 'Analyze label' }))
+    expect(await screen.findByText('Unreadable image')).toBeVisible()
+
+    const netContents = screen.getByLabelText('Net contents')
+    await user.clear(netContents)
+    await user.type(netContents, '750 mL trailing')
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeDisabled()
+  })
+
   it('isolates a failed item and lets the next queued item complete', async () => {
     const user = userEvent.setup()
     const recognize = vi

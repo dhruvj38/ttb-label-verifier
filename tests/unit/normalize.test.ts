@@ -38,14 +38,33 @@ describe('similarity helpers', () => {
     expect(evidence.ambiguousContinuation).toBe(false)
   })
 
-  it('marks an exact single-line fragment with matching adjacent context', () => {
+  it.each([
+    ['OLD TOM', 'DISTILLERY'],
+    ['Old Tom', 'DISTILLERY'],
+    ['OLD TOM', '1792 DISTILLERY'],
+    ['OLD TOM', 'THE OLD DISTILLERY COMPANY'],
+  ])(
+    'marks exact fragment %j as ambiguous before adjacent %j',
+    (fragment, continuation) => {
+      const evidence = findIdentityEvidence(
+        `${fragment}\n${continuation}`,
+        fragment,
+      )
+      expect(evidence.similarity).toBe(1)
+      expect(evidence.text).toBe(`${fragment}\n${continuation}`)
+      expect(evidence.ambiguousContinuation).toBe(true)
+    },
+  )
+
+  it('does not treat a separately supplied identity as a continuation', () => {
     const evidence = findIdentityEvidence(
-      'OLD TOM\nDISTILLERY\nKentucky Straight\nBourbon Whiskey',
-      'OLD TOM',
+      "STONE'S THROW\nKentucky Straight Bourbon Whiskey\n45% Alc./Vol.",
+      "STONE'S THROW",
+      ['Kentucky Straight Bourbon Whiskey'],
     )
     expect(evidence.similarity).toBe(1)
-    expect(evidence.text).toBe('OLD TOM\nDISTILLERY')
-    expect(evidence.ambiguousContinuation).toBe(true)
+    expect(evidence.text).toBe("STONE'S THROW")
+    expect(evidence.ambiguousContinuation).toBe(false)
   })
 
   it('returns zero when either side is empty', () => {

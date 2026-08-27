@@ -3,6 +3,19 @@ export interface NumericEvidence {
   raw: string
 }
 
+const NET_CONTENTS_NUMBER = '(\\d+(?:\\.\\d+)?)'
+const NET_CONTENTS_UNIT =
+  '(m\\s*l|millilit(?:er|re)s?|l(?:iter|itre)?s?|fl\\.?\\s*oz\\.?)'
+
+function toMilliliters(amount: number, rawUnit: string): number {
+  const unit = rawUnit.replace(/[\s.]/g, '').toLowerCase()
+  if (unit === 'l' || unit.startsWith('liter') || unit.startsWith('litre')) {
+    return amount * 1000
+  }
+  if (unit === 'floz') return amount * 29.5735
+  return amount
+}
+
 function uniqueEvidence(values: NumericEvidence[]): NumericEvidence[] {
   return values.filter(
     (candidate, index) =>
@@ -41,18 +54,14 @@ export function parseExpectedAbv(value: string): number | null {
 
 export function extractNetContents(text: string): NumericEvidence[] {
   const results: NumericEvidence[] = []
-  const pattern =
-    /\b(\d+(?:\.\d+)?)\s*(m\s*l|millilit(?:er|re)s?|l(?:iter|itre)?s?|fl\.?\s*oz\.?)\b/gi
+  const pattern = new RegExp(
+    `\\b${NET_CONTENTS_NUMBER}\\s*${NET_CONTENTS_UNIT}\\b`,
+    'gi',
+  )
 
   for (const match of text.matchAll(pattern)) {
     const amount = Number(match[1])
-    const unit = match[2]!.replace(/[\s.]/g, '').toLowerCase()
-    let milliliters = amount
-    if (unit === 'l' || unit.startsWith('liter') || unit.startsWith('litre')) {
-      milliliters = amount * 1000
-    } else if (unit === 'floz') {
-      milliliters = amount * 29.5735
-    }
+    const milliliters = toMilliliters(amount, match[2]!)
     if (Number.isFinite(milliliters)) {
       results.push({ value: milliliters, raw: match[0].trim() })
     }
@@ -61,7 +70,15 @@ export function extractNetContents(text: string): NumericEvidence[] {
 }
 
 export function parseExpectedNetContents(value: string): number | null {
-  return extractNetContents(value)[0]?.value ?? null
+  const match = value.match(
+    new RegExp(`^\\s*${NET_CONTENTS_NUMBER}\\s*${NET_CONTENTS_UNIT}\\s*$`, 'i'),
+  )
+  if (!match) return null
+
+  const amount = Number(match[1])
+  if (!Number.isFinite(amount) || amount <= 0) return null
+
+  return toMilliliters(amount, match[2]!)
 }
 
 export function extractWarningEvidence(text: string): string {

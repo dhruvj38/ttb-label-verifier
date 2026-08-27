@@ -57,4 +57,27 @@ describe('net contents extraction', () => {
   it('rejects values without a recognized volume unit', () => {
     expect(parseExpectedNetContents('750')).toBeNull()
   })
+
+  it.each([
+    'garbage 750 mL',
+    '750 mL garbage',
+    '750..5 mL',
+    '750 mLs',
+    '0 mL',
+    '-750 mL',
+    'Infinity L',
+    '',
+  ])('rejects invalid application net contents %j', (value) => {
+    expect(parseExpectedNetContents(value)).toBeNull()
+  })
+
+  it.each([
+    ['750 mL', 750],
+    [' 0.75 L ', 750],
+    ['25.36 fl. oz.', 749.9],
+    ['700 millilitres', 700],
+    ['1 liter', 1000],
+  ])('accepts complete positive application volume %j', (value, expected) => {
+    expect(parseExpectedNetContents(value)).toBeCloseTo(expected, 0)
+  })
 })

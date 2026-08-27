@@ -82,6 +82,35 @@ describe('label rules', () => {
     expect(full?.observed).toBe('OLD TOM\nDISTILLERY')
   })
 
+  it.each([
+    ['OLD TOM', '1792 DISTILLERY'],
+    ['Old Tom', 'DISTILLERY'],
+    ['OLD TOM', 'THE OLD DISTILLERY COMPANY'],
+  ])(
+    'reviews fragment %j before presentation-independent continuation %j',
+    (brand, continuation) => {
+      const splitText = validText.replace(
+        "STONE'S THROW",
+        `${brand}\n${continuation}`,
+      )
+      const fragment = evaluateLabel(
+        { ...expected, brand },
+        splitText,
+        94,
+      ).find((item) => item.key === 'brand')
+      expect(fragment?.status).toBe('review')
+      expect(fragment?.observed).toBe(`${brand}\n${continuation}`)
+
+      const full = evaluateLabel(
+        { ...expected, brand: `${brand} ${continuation}` },
+        splitText,
+        94,
+      ).find((item) => item.key === 'brand')
+      expect(full?.status).toBe('pass')
+      expect(full?.observed).toBe(`${brand}\n${continuation}`)
+    },
+  )
+
   it('does not pass an exact class line when adjacent text plausibly continues it', () => {
     const splitText = validText.replace(
       'Kentucky Straight Bourbon Whiskey',
@@ -121,6 +150,23 @@ describe('label rules', () => {
       const check = evaluateLabel({ ...expected, abv }, validText, 94).find(
         (item) => item.key === 'abv',
       )
+      expect(check?.status).toBe('review')
+    }
+  })
+
+  it('never passes malformed application net contents', () => {
+    for (const netContents of [
+      'garbage 750 mL',
+      '750 mL garbage',
+      '750..5 mL',
+      '750 mLs',
+      '0 mL',
+    ]) {
+      const check = evaluateLabel(
+        { ...expected, netContents },
+        validText,
+        94,
+      ).find((item) => item.key === 'netContents')
       expect(check?.status).toBe('review')
     }
   })

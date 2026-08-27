@@ -16,7 +16,7 @@ import {
 } from '../components/icons'
 import { StatusBadge } from '../components/StatusBadge'
 import { ImageInspector } from '../components/ImageInspector'
-import { parseExpectedAbv } from '../domain/extract'
+import { parseExpectedAbv, parseExpectedNetContents } from '../domain/extract'
 import { evaluateLabel, overallStatus, statusCounts } from '../domain/rules'
 import {
   EMPTY_VALUES,
@@ -47,7 +47,8 @@ function validateFile(file: File): string | null {
 function valuesAreValid(values: ApplicationValues): boolean {
   return (
     Object.values(values).every((value) => value.trim().length > 0) &&
-    parseExpectedAbv(values.abv) !== null
+    parseExpectedAbv(values.abv) !== null &&
+    parseExpectedNetContents(values.netContents) !== null
   )
 }
 
@@ -555,6 +556,9 @@ function ReviewItemCard({
   const abvIsInvalid =
     item.values.abv.trim().length > 0 &&
     parseExpectedAbv(item.values.abv) === null
+  const netContentsIsInvalid =
+    item.values.netContents.trim().length > 0 &&
+    parseExpectedNetContents(item.values.netContents) === null
   const fields: Array<{
     key: keyof ApplicationValues
     label: string
@@ -623,6 +627,12 @@ function ReviewItemCard({
           <div className="application-fields">
             {fields.map((field) => {
               const inputId = `${item.id}-${field.key}`
+              const validationMessage =
+                field.key === 'abv' && abvIsInvalid
+                  ? 'Enter a complete number from 0 to 100.'
+                  : field.key === 'netContents' && netContentsIsInvalid
+                    ? 'Enter a positive number followed by mL, L, or fl oz.'
+                    : undefined
               return (
                 <div
                   key={field.key}
@@ -647,11 +657,9 @@ function ReviewItemCard({
                         onChange(item.id, field.key, event.target.value)
                       }
                       disabled={disabled}
-                      aria-invalid={field.key === 'abv' && abvIsInvalid}
+                      aria-invalid={validationMessage ? true : undefined}
                       aria-describedby={
-                        field.key === 'abv' && abvIsInvalid
-                          ? `${inputId}-error`
-                          : undefined
+                        validationMessage ? `${inputId}-error` : undefined
                       }
                       required
                     />
@@ -659,9 +667,9 @@ function ReviewItemCard({
                       <span aria-hidden="true">{field.suffix}</span>
                     )}
                   </div>
-                  {field.key === 'abv' && abvIsInvalid && (
+                  {validationMessage && (
                     <span className="field-error" id={`${inputId}-error`}>
-                      Enter a complete number from 0 to 100.
+                      {validationMessage}
                     </span>
                   )}
                 </div>
