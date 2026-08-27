@@ -21,6 +21,18 @@ function identityCheck(
 ): CheckResult {
   const evidence = findIdentityEvidence(text, expected)
 
+  if (evidence.similarity === 1 && evidence.ambiguousContinuation) {
+    return {
+      key,
+      label,
+      status: 'review',
+      expected,
+      observed: evidence.text,
+      reason:
+        'One OCR line matches, but adjacent text with the same casing may continue the identity. Review the complete label name.',
+    }
+  }
+
   if (evidence.similarity === 1) {
     return {
       key,

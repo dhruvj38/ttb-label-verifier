@@ -35,6 +35,17 @@ describe('similarity helpers', () => {
     )
     expect(evidence.similarity).toBe(1)
     expect(evidence.text).toBe('Kentucky Straight\nBourbon Whiskey')
+    expect(evidence.ambiguousContinuation).toBe(false)
+  })
+
+  it('marks an exact single-line fragment with matching adjacent context', () => {
+    const evidence = findIdentityEvidence(
+      'OLD TOM\nDISTILLERY\nKentucky Straight\nBourbon Whiskey',
+      'OLD TOM',
+    )
+    expect(evidence.similarity).toBe(1)
+    expect(evidence.text).toBe('OLD TOM\nDISTILLERY')
+    expect(evidence.ambiguousContinuation).toBe(true)
   })
 
   it('returns zero when either side is empty', () => {

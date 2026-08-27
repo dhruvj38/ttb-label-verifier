@@ -63,6 +63,45 @@ describe('label rules', () => {
     expect(check?.observed).toBe('Kentucky Straight\nBourbon Whiskey')
   })
 
+  it('does not pass an exact brand line when adjacent text plausibly continues it', () => {
+    const splitText = validText.replace("STONE'S THROW", 'OLD TOM\nDISTILLERY')
+    const fragment = evaluateLabel(
+      { ...expected, brand: 'OLD TOM' },
+      splitText,
+      94,
+    ).find((item) => item.key === 'brand')
+    expect(fragment?.status).toBe('review')
+    expect(fragment?.observed).toBe('OLD TOM\nDISTILLERY')
+
+    const full = evaluateLabel(
+      { ...expected, brand: 'OLD TOM DISTILLERY' },
+      splitText,
+      94,
+    ).find((item) => item.key === 'brand')
+    expect(full?.status).toBe('pass')
+    expect(full?.observed).toBe('OLD TOM\nDISTILLERY')
+  })
+
+  it('does not pass an exact class line when adjacent text plausibly continues it', () => {
+    const splitText = validText.replace(
+      'Kentucky Straight Bourbon Whiskey',
+      'Kentucky Straight\nBourbon Whiskey',
+    )
+    const fragment = evaluateLabel(
+      { ...expected, classType: 'Kentucky Straight' },
+      splitText,
+      94,
+    ).find((item) => item.key === 'classType')
+    expect(fragment?.status).toBe('review')
+    expect(fragment?.observed).toBe('Kentucky Straight\nBourbon Whiskey')
+
+    const full = evaluateLabel(expected, splitText, 94).find(
+      (item) => item.key === 'classType',
+    )
+    expect(full?.status).toBe('pass')
+    expect(full?.observed).toBe('Kentucky Straight\nBourbon Whiskey')
+  })
+
   it('reports conflicting ABV and net contents as mismatches', () => {
     const checks = evaluateLabel(
       expected,

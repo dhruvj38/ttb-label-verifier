@@ -41,6 +41,46 @@ export function levenshteinSimilarity(left: string, right: string): number {
 export interface IdentityEvidence {
   text: string
   similarity: number
+  ambiguousContinuation: boolean
+}
+
+type LineCase = 'upper' | 'lower' | 'title' | 'mixed' | 'none'
+
+function lineCase(value: string): LineCase {
+  const words = value.match(/\p{L}+/gu) ?? []
+  if (words.length === 0) return 'none'
+  const letters = words.join('')
+  if (letters === letters.toLocaleUpperCase('en-US')) return 'upper'
+  if (letters === letters.toLocaleLowerCase('en-US')) return 'lower'
+  if (
+    words.every(
+      (word) =>
+        word[0] === word[0]?.toLocaleUpperCase('en-US') &&
+        word.slice(1) === word.slice(1).toLocaleLowerCase('en-US'),
+    )
+  )
+    return 'title'
+  return 'mixed'
+}
+
+function plausiblyContinues(anchor: string, adjacent: string): boolean {
+  if (/\d/.test(adjacent)) return false
+  const anchorCase = lineCase(anchor)
+  if (
+    anchorCase === 'none' ||
+    anchorCase === 'mixed' ||
+    lineCase(adjacent) !== anchorCase
+  )
+    return false
+
+  const normalizedAnchor = normalizeIdentity(anchor)
+  const normalizedAdjacent = normalizeIdentity(adjacent)
+  const anchorWords = normalizedAnchor.split(' ').length
+  const adjacentWords = normalizedAdjacent.split(' ').length
+  return (
+    adjacentWords <= Math.max(anchorWords + 1, 3) &&
+    normalizedAdjacent.length <= Math.max(normalizedAnchor.length * 1.6, 16)
+  )
 }
 
 export function findIdentityEvidence(
@@ -53,7 +93,11 @@ export function findIdentityEvidence(
     .map((line) => line.trim())
     .filter(Boolean)
 
-  let closest: IdentityEvidence = { text: 'Not found', similarity: 0 }
+  let closest: IdentityEvidence = {
+    text: 'Not found',
+    similarity: 0,
+    ambiguousContinuation: false,
+  }
   const maximumLines = Math.min(4, lines.length)
 
   for (let lineCount = 1; lineCount <= maximumLines; lineCount += 1) {
@@ -63,8 +107,32 @@ export function findIdentityEvidence(
         normalizeIdentity(evidenceLines.join(' ')),
         normalizedExpected,
       )
-      if (similarity > closest.similarity) {
-        closest = { text: evidenceLines.join('\n'), similarity }
+      const previousContinues =
+        lineCount === 1 &&
+        similarity === 1 &&
+        start > 0 &&
+        plausiblyContinues(evidenceLines[0]!, lines[start - 1]!)
+      const nextContinues =
+        lineCount === 1 &&
+        similarity === 1 &&
+        start + 1 < lines.length &&
+        plausiblyContinues(evidenceLines[0]!, lines[start + 1]!)
+      const ambiguousContinuation =
+        similarity === 1 && (previousContinues || nextContinues)
+      const contextStart = previousContinues ? start - 1 : start
+      const contextEnd = nextContinues ? start + 2 : start + lineCount
+      const candidate: IdentityEvidence = {
+        text: lines.slice(contextStart, contextEnd).join('\n'),
+        similarity,
+        ambiguousContinuation,
+      }
+      if (
+        candidate.similarity > closest.similarity ||
+        (candidate.similarity === closest.similarity &&
+          closest.ambiguousContinuation &&
+          !candidate.ambiguousContinuation)
+      ) {
+        closest = candidate
       }
     }
   }
