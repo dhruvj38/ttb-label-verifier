@@ -11,10 +11,10 @@ const expected: ApplicationValues = {
 }
 
 const validText = `
-STONE'S THROW
-Kentucky Straight Bourbon Whiskey
 45% Alc./Vol. (90 Proof)
+STONE'S THROW
 750 mL
+Kentucky Straight Bourbon Whiskey
 ${GOVERNMENT_WARNING}
 `
 
@@ -199,10 +199,14 @@ describe('label rules', () => {
   })
 
   it('does not join candidate text across the separately submitted identity', () => {
-    const text = validText.replace(
-      "STONE'S THROW\nKentucky Straight Bourbon Whiskey",
-      'OLD TOM\nKentucky Straight Bourbon Whiskey\nDISTILLERY',
-    )
+    const text = `
+45% Alc./Vol. (90 Proof)
+OLD TOM
+Kentucky Straight Bourbon Whiskey
+DISTILLERY
+750 mL
+${GOVERNMENT_WARNING}
+`
     const brand = evaluateLabel(
       {
         ...expected,
@@ -212,6 +216,30 @@ describe('label rules', () => {
       94,
     ).find((item) => item.key === 'brand')
     expect(brand?.status).not.toBe('pass')
+  })
+
+  it('keeps directly adjacent submitted identities in review', () => {
+    const text = `
+OLD TOM
+BOURBON WHISKEY
+45% Alc./Vol.
+750 mL
+${GOVERNMENT_WARNING}
+`
+    const checks = evaluateLabel(
+      {
+        brand: 'OLD TOM',
+        classType: 'BOURBON WHISKEY',
+        abv: '45',
+        netContents: '750 mL',
+      },
+      text,
+      94,
+    )
+    expect(checks.find((item) => item.key === 'brand')?.status).toBe('review')
+    expect(checks.find((item) => item.key === 'classType')?.status).toBe(
+      'review',
+    )
   })
 
   it('does not pass an exact class line when adjacent text plausibly continues it', () => {
@@ -247,6 +275,24 @@ describe('label rules', () => {
       'mismatch',
     )
   })
+
+  it.each([
+    ['1,45% Alc./Vol.', '1,750 mL'],
+    ['.45% Alc./Vol.', '.750 mL'],
+    ['-45% Alc./Vol.', '-750 mL'],
+  ])(
+    'reviews malformed OCR numeric tokens %j and %j without passing suffixes',
+    (abv, volume) => {
+      const text = validText
+        .replace('45% Alc./Vol. (90 Proof)', abv)
+        .replace('750 mL', volume)
+      const checks = evaluateLabel(expected, text, 94)
+      expect(checks.find((item) => item.key === 'abv')?.status).toBe('review')
+      expect(checks.find((item) => item.key === 'netContents')?.status).toBe(
+        'review',
+      )
+    },
+  )
 
   it('never passes malformed or out-of-range application ABV values', () => {
     for (const abv of ['450%', '45abc', 'Infinity']) {

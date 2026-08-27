@@ -96,6 +96,18 @@ function numericCheck(
       reason: 'No recognized label value was found.',
     }
   }
+  const malformed = evidence.filter((candidate) => candidate.malformed)
+  if (malformed.length > 0) {
+    return {
+      key,
+      label,
+      status: 'review',
+      expected: expectedDisplay,
+      observed: malformed.map((item) => item.raw).join(', '),
+      reason:
+        'OCR found a numeric-looking value with unsupported punctuation or sign. Review the label value manually.',
+    }
+  }
   const match = evidence.find(
     (candidate) => Math.abs(candidate.value - expected) <= tolerance,
   )

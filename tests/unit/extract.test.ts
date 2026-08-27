@@ -19,6 +19,23 @@ describe('ABV extraction', () => {
     expect(extractAbv('90 Proof')).toEqual([])
   })
 
+  it.each(['1,45% Alc./Vol.', '.45% Alc./Vol.', '-45% Alc./Vol.'])(
+    'keeps malformed OCR ABV token %j from becoming a valid suffix',
+    (text) => {
+      const evidence = extractAbv(text)
+      expect(evidence).toEqual([
+        expect.objectContaining({ raw: text, malformed: true }),
+      ])
+      expect(evidence.some((item) => item.value === 45)).toBe(false)
+    },
+  )
+
+  it('extracts valid ABV beside ordinary label text', () => {
+    const evidence = extractAbv('Bottled at 45.5% Alc./Vol. in Kentucky')
+    expect(evidence).toEqual([expect.objectContaining({ value: 45.5 })])
+    expect(evidence[0]).not.toHaveProperty('malformed')
+  })
+
   it.each([
     '450',
     '450%',
@@ -56,6 +73,25 @@ describe('net contents extraction', () => {
 
   it('rejects values without a recognized volume unit', () => {
     expect(parseExpectedNetContents('750')).toBeNull()
+  })
+
+  it.each(['1,750 mL', '.750 mL', '-750 mL'])(
+    'keeps malformed OCR volume token %j from becoming a valid suffix',
+    (text) => {
+      const evidence = extractNetContents(text)
+      expect(evidence).toEqual([
+        expect.objectContaining({ raw: text, malformed: true }),
+      ])
+      expect(evidence.some((item) => item.value === 750)).toBe(false)
+    },
+  )
+
+  it('extracts valid volume beside ordinary label text', () => {
+    const evidence = extractNetContents(
+      'Net contents: 750.5 mL — bottled locally',
+    )
+    expect(evidence).toEqual([expect.objectContaining({ value: 750.5 })])
+    expect(evidence[0]).not.toHaveProperty('malformed')
   })
 
   it.each([

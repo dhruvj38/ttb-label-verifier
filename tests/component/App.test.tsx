@@ -6,10 +6,10 @@ import type { OcrEngine } from '../../src/domain/types'
 import { GOVERNMENT_WARNING } from '../../src/domain/warning'
 
 const extractedText = `
-OLD TOM DISTILLERY
-Kentucky Straight Bourbon Whiskey
 45% Alc./Vol. (90 Proof)
+OLD TOM DISTILLERY
 750 mL
+Kentucky Straight Bourbon Whiskey
 ${GOVERNMENT_WARNING}
 `
 
@@ -272,6 +272,62 @@ describe('App', () => {
     ).toBeVisible()
     expect(
       within(fullClass.closest('article')!).getByText('Pass'),
+    ).toBeVisible()
+  })
+
+  it('keeps directly adjacent complete application identities in review', async () => {
+    const user = userEvent.setup()
+    const engine = mockEngine({
+      recognize: vi.fn().mockResolvedValue({
+        text: `OLD TOM\nBOURBON WHISKEY\n45% Alc./Vol.\n750 mL\n${GOVERNMENT_WARNING}`,
+        confidence: 92,
+        durationMs: 700,
+      }),
+    })
+    render(<App ocrEngine={engine} />)
+    await addValidFile(user)
+    await user.type(screen.getByLabelText('Brand name'), 'OLD TOM')
+    await user.type(screen.getByLabelText('Class / type'), 'BOURBON WHISKEY')
+    await user.type(screen.getByLabelText('Alcohol by volume'), '45')
+    await user.type(screen.getByLabelText('Net contents'), '750 mL')
+    await user.click(screen.getByRole('button', { name: 'Analyze label' }))
+
+    const brand = await screen.findByRole('heading', { name: 'Brand name' })
+    const classType = screen.getByRole('heading', { name: 'Class / type' })
+    expect(
+      within(brand.closest('article')!).getByText('Needs review'),
+    ).toBeVisible()
+    expect(
+      within(classType.closest('article')!).getByText('Needs review'),
+    ).toBeVisible()
+  })
+
+  it('reviews malformed OCR numeric prefixes instead of passing suffixes', async () => {
+    const user = userEvent.setup()
+    const engine = mockEngine({
+      recognize: vi.fn().mockResolvedValue({
+        text: `45% Alc./Vol.\nOLD TOM DISTILLERY\n-750 mL\nKentucky Straight Bourbon Whiskey\n${GOVERNMENT_WARNING}`.replace(
+          '45% Alc./Vol.',
+          '1,45% Alc./Vol.',
+        ),
+        confidence: 92,
+        durationMs: 700,
+      }),
+    })
+    render(<App ocrEngine={engine} />)
+    await addValidFile(user)
+    await completeFields(user)
+    await user.click(screen.getByRole('button', { name: 'Analyze label' }))
+
+    const abv = await screen.findByRole('heading', {
+      name: 'Alcohol by volume',
+    })
+    const volume = screen.getByRole('heading', { name: 'Net contents' })
+    expect(
+      within(abv.closest('article')!).getByText('Needs review'),
+    ).toBeVisible()
+    expect(
+      within(volume.closest('article')!).getByText('Needs review'),
     ).toBeVisible()
   })
 

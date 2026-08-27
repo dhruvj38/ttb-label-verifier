@@ -67,8 +67,8 @@ function knownIdentityLines(
   return indices
 }
 
-function plausiblyContinues(value: string, isKnownSeparateLine: boolean) {
-  if (isKnownSeparateLine || !/\p{L}/u.test(value)) return false
+function plausiblyContinues(value: string) {
+  if (!/\p{L}/u.test(value)) return false
   if (/%/.test(value) || /^\s*government\s+warning\s*:/i.test(value)) {
     return false
   }
@@ -113,14 +113,9 @@ export function findIdentityEvidence(
       const nextContinues =
         similarity === 1 &&
         start + lineCount < lines.length &&
-        plausiblyContinues(
-          lines[start + lineCount]!,
-          knownSeparateLines.has(start + lineCount),
-        )
+        plausiblyContinues(lines[start + lineCount]!)
       const previousContinues =
-        similarity === 1 &&
-        start > 0 &&
-        plausiblyContinues(lines[start - 1]!, knownSeparateLines.has(start - 1))
+        similarity === 1 && start > 0 && plausiblyContinues(lines[start - 1]!)
       const ambiguousContinuation =
         similarity === 1 && (previousContinues || nextContinues)
       const contextStart = previousContinues ? start - 1 : start
