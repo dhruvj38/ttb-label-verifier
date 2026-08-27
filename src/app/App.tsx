@@ -6,24 +6,22 @@ import {
   type ChangeEvent,
   type DragEvent,
 } from 'react'
-import { CheckResult } from '../components/CheckResult'
-import {
-  ChevronIcon,
-  LockIcon,
-  SparkIcon,
-  TrashIcon,
-  UploadIcon,
-} from '../components/icons'
-import { StatusBadge } from '../components/StatusBadge'
-import { ImageInspector } from '../components/ImageInspector'
+import { ManifestImport } from '../components/ManifestImport'
+import { ReviewItemCard } from '../components/ReviewItemCard'
+import { LockIcon, SparkIcon, UploadIcon } from '../components/icons'
 import { parseExpectedAbv, parseExpectedNetContents } from '../domain/extract'
-import { evaluateLabel, overallStatus, statusCounts } from '../domain/rules'
+import {
+  applyWarningFormatDecision,
+  evaluateLabel,
+  statusCounts,
+} from '../domain/rules'
 import {
   EMPTY_VALUES,
   SAMPLE_VALUES,
   type ApplicationValues,
   type OcrEngine,
   type ReviewItem,
+  type WarningFormatDecision,
 } from '../domain/types'
 import { sharedOcrService } from '../ocr/OcrService'
 
@@ -35,20 +33,37 @@ function makeId(): string {
 }
 
 function validateFile(file: File): string | null {
-  if (!ACCEPTED_TYPES.has(file.type)) {
+  if (!ACCEPTED_TYPES.has(file.type))
     return `${file.name}: choose a JPEG, PNG, or WebP image.`
-  }
-  if (file.size > MAX_FILE_SIZE) {
+  if (file.size > MAX_FILE_SIZE)
     return `${file.name}: the 12 MB file limit was exceeded.`
-  }
   return null
 }
 
 function valuesAreValid(values: ApplicationValues): boolean {
   return (
-    Object.values(values).every((value) => value.trim().length > 0) &&
+    values.brand.trim().length > 0 &&
+    values.classType.trim().length > 0 &&
+    values.nameAddress.trim().length > 0 &&
+    (values.productOrigin === 'domestic' ||
+      values.countryOfOrigin.trim().length > 0) &&
     parseExpectedAbv(values.abv) !== null &&
     parseExpectedNetContents(values.netContents) !== null
+  )
+}
+
+function valuesAreEqual(
+  left: ApplicationValues,
+  right: ApplicationValues,
+): boolean {
+  return (
+    left.brand === right.brand &&
+    left.classType === right.classType &&
+    left.abv === right.abv &&
+    left.netContents === right.netContents &&
+    left.nameAddress === right.nameAddress &&
+    left.productOrigin === right.productOrigin &&
+    left.countryOfOrigin === right.countryOfOrigin
   )
 }
 
@@ -91,7 +106,6 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
       active = false
     }
   }, [ocrEngine])
-
   useEffect(
     () => () => {
       for (const item of itemsRef.current) URL.revokeObjectURL(item.previewUrl)
@@ -100,40 +114,42 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
   )
 
   const completedItems = items.filter((item) => item.state === 'complete')
+  const queuedItems = items.filter(
+    (item) =>
+      (item.state === 'ready' || item.state === 'error') &&
+      valuesAreValid(item.values),
+  )
+  const readyOrErrorItemCount = items.filter(
+    (item) => item.state === 'ready' || item.state === 'error',
+  ).length
   const allChecks = completedItems.flatMap((item) => item.checks ?? [])
   const counts = statusCounts(allChecks)
-  const activeStep = items.length === 0 ? 1 : completedItems.length > 0 ? 3 : 2
   const isBusy = items.some(
     (item) => item.state === 'queued' || item.state === 'processing',
   )
-  const canAnalyze =
-    items.length > 0 &&
-    !isBusy &&
-    items.every((item) => valuesAreValid(item.values))
-
+  const activeStep = items.length === 0 ? 1 : completedItems.length > 0 ? 3 : 2
+  const canAnalyze = !isBusy && queuedItems.length > 0
   const batchStatus = useMemo(() => {
     if (isBusy)
       return `Analyzing ${items.filter((item) => item.state === 'complete').length + 1} of ${items.length}`
     if (completedItems.length > 0)
-      return `${completedItems.length} label${completedItems.length === 1 ? '' : 's'} reviewed`
+      return `${completedItems.length} label${completedItems.length === 1 ? '' : 's'} reviewed${queuedItems.length ? ` · ${queuedItems.length} ready to analyze` : ''}`
     return `${items.length} label${items.length === 1 ? '' : 's'} ready`
-  }, [completedItems.length, isBusy, items])
+  }, [completedItems.length, isBusy, items, queuedItems.length])
 
   function updateItem(id: string, update: Partial<ReviewItem>) {
     setItems((current) =>
       current.map((item) => (item.id === id ? { ...item, ...update } : item)),
     )
   }
-
   function addFiles(fileList: FileList | File[]) {
     const files = Array.from(fileList)
     const errors = files
       .map(validateFile)
-      .filter((error): error is string => !!error)
+      .filter((error): error is string => Boolean(error))
     const accepted = files.filter((file) => !validateFile(file))
     setUploadErrors(errors)
-    if (accepted.length === 0) return
-
+    if (!accepted.length) return
     setItems((current) => [
       ...current,
       ...accepted.map((file) => ({
@@ -147,15 +163,13 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
       })),
     ])
   }
-
   async function addSample() {
     try {
       const response = await fetch(
         `${import.meta.env.BASE_URL}samples/valid-bourbon.png`,
       )
       if (!response.ok) throw new Error('Sample unavailable')
-      const blob = await response.blob()
-      const file = new File([blob], 'old-tom-bourbon.png', {
+      const file = new File([await response.blob()], 'old-tom-bourbon.png', {
         type: 'image/png',
       })
       setItems((current) => [
@@ -177,18 +191,6 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
       ])
     }
   }
-
-  function handleInput(event: ChangeEvent<HTMLInputElement>) {
-    if (event.target.files) addFiles(event.target.files)
-    event.target.value = ''
-  }
-
-  function handleDrop(event: DragEvent<HTMLDivElement>) {
-    event.preventDefault()
-    setIsDragging(false)
-    addFiles(event.dataTransfer.files)
-  }
-
   function updateValues(
     id: string,
     field: keyof ApplicationValues,
@@ -196,50 +198,114 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
   ) {
     setItems((current) =>
       current.map((item) =>
-        item.id === id
-          ? {
+        item.id !== id
+          ? item
+          : {
               ...item,
-              values: { ...item.values, [field]: value },
+              values: {
+                ...item.values,
+                [field]: value,
+                ...(field === 'productOrigin' && value === 'domestic'
+                  ? { countryOfOrigin: '' }
+                  : {}),
+              } as ApplicationValues,
               state: item.state === 'complete' ? 'ready' : item.state,
               checks: item.state === 'complete' ? undefined : item.checks,
-            }
-          : item,
+              warningFormatDecision:
+                item.state === 'complete'
+                  ? undefined
+                  : item.warningFormatDecision,
+            },
       ),
     )
   }
-
+  function applyManifest(
+    valuesByFilename: Map<string, ApplicationValues>,
+  ): boolean {
+    const hasEveryCurrentMapping = itemsRef.current.every((item) =>
+      valuesByFilename.has(item.file.name.toLocaleLowerCase('en-US')),
+    )
+    if (!hasEveryCurrentMapping) return false
+    setItems((current) =>
+      current.every((item) =>
+        valuesByFilename.has(item.file.name.toLocaleLowerCase('en-US')),
+      )
+        ? current.map((item) => {
+            const values = valuesByFilename.get(
+              item.file.name.toLocaleLowerCase('en-US'),
+            )!
+            if (
+              item.state !== 'complete' ||
+              valuesAreEqual(item.values, values)
+            ) {
+              return item.state === 'complete' ? item : { ...item, values }
+            }
+            return {
+              ...item,
+              values,
+              state: 'ready',
+              checks: undefined,
+              warningFormatDecision: undefined,
+            }
+          })
+        : current,
+    )
+    return true
+  }
   function removeItem(id: string) {
     const item = itemsRef.current.find((candidate) => candidate.id === id)
     if (item) URL.revokeObjectURL(item.previewUrl)
     setItems((current) => current.filter((candidate) => candidate.id !== id))
   }
-
   function startOver() {
     for (const item of itemsRef.current) URL.revokeObjectURL(item.previewUrl)
     setItems([])
     setUploadErrors([])
   }
-
+  function decideWarningFormat(id: string, decision?: WarningFormatDecision) {
+    setItems((current) =>
+      current.map((item) =>
+        item.id !== id || !item.checks
+          ? item
+          : {
+              ...item,
+              warningFormatDecision: decision,
+              checks: applyWarningFormatDecision(item.checks, decision),
+            },
+      ),
+    )
+  }
   async function processItem(id: string) {
     const item = itemsRef.current.find((candidate) => candidate.id === id)
-    if (!item) return
+    if (
+      !item ||
+      !valuesAreValid(item.values) ||
+      (item.state !== 'ready' &&
+        item.state !== 'error' &&
+        item.state !== 'queued')
+    )
+      return
     updateItem(id, {
       state: 'processing',
       error: undefined,
       checks: undefined,
+      warningFormatDecision: undefined,
       progress: 0.02,
       progressLabel: 'Starting analysis',
     })
-
     try {
-      const result = await ocrEngine.recognize(item.file, (progress, label) => {
-        updateItem(id, { progress, progressLabel: label })
-      })
-      const checks = evaluateLabel(item.values, result.text, result.confidence)
+      const result = await ocrEngine.recognize(item.file, (progress, label) =>
+        updateItem(id, { progress, progressLabel: label }),
+      )
       updateItem(id, {
         state: 'complete',
         result,
-        checks,
+        checks: evaluateLabel(
+          item.values,
+          result.text,
+          result.confidence,
+          result.warningConfidence,
+        ),
         progress: 1,
         progressLabel: 'Analysis complete',
       })
@@ -255,17 +321,26 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
       })
     }
   }
-
   async function analyzeAll() {
-    const ids = itemsRef.current.map((item) => item.id)
+    const ids = itemsRef.current
+      .filter(
+        (item) =>
+          (item.state === 'ready' || item.state === 'error') &&
+          valuesAreValid(item.values),
+      )
+      .map((item) => item.id)
     setItems((current) =>
-      current.map((item) => ({
-        ...item,
-        state: 'queued',
-        progress: 0,
-        progressLabel: 'Queued',
-        error: undefined,
-      })),
+      current.map((item) =>
+        ids.includes(item.id)
+          ? {
+              ...item,
+              state: 'queued',
+              progress: 0,
+              progressLabel: 'Queued',
+              error: undefined,
+            }
+          : item,
+      ),
     )
     for (const id of ids) await processItem(id)
   }
@@ -275,7 +350,6 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
       <a className="skip-link" href="#workspace">
         Skip to label review
       </a>
-
       <header className="site-header">
         <a
           className="wordmark"
@@ -294,7 +368,6 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
           Prototype · Not official TTB approval
         </div>
       </header>
-
       <main id="workspace">
         <section className="hero" aria-labelledby="page-title">
           <div className="hero-copy">
@@ -315,11 +388,10 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
             </div>
           </aside>
         </section>
-
         <nav className="step-rail" aria-label="Review steps">
           {[
             ['1', 'Add labels', 'JPEG, PNG or WebP'],
-            ['2', 'Enter application', 'Four distilled-spirits fields'],
+            ['2', 'Enter application', 'Required distilled-spirits fields'],
             ['3', 'Review evidence', 'Pass, mismatch or review'],
           ].map(([number, label, detail], index) => {
             const step = index + 1
@@ -346,7 +418,6 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
             )
           })}
         </nav>
-
         <section
           className="panel upload-panel"
           aria-labelledby="upload-heading"
@@ -369,7 +440,6 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
                   : 'Warming OCR'}
             </div>
           </div>
-
           <div
             className={`drop-zone ${isDragging ? 'drop-zone-active' : ''}`}
             onDragEnter={(event) => {
@@ -380,7 +450,11 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
             onDragLeave={(event) => {
               if (event.currentTarget === event.target) setIsDragging(false)
             }}
-            onDrop={handleDrop}
+            onDrop={(event: DragEvent<HTMLDivElement>) => {
+              event.preventDefault()
+              setIsDragging(false)
+              addFiles(event.dataTransfer.files)
+            }}
           >
             <div className="upload-icon">
               <UploadIcon />
@@ -411,11 +485,13 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
               type="file"
               accept="image/jpeg,image/png,image/webp"
               multiple
-              onChange={handleInput}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                if (event.target.files) addFiles(event.target.files)
+                event.target.value = ''
+              }}
               aria-label="Choose label images"
             />
           </div>
-
           {uploadErrors.length > 0 && (
             <div className="error-banner" role="alert">
               <strong>Some images were not added</strong>
@@ -427,7 +503,6 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
             </div>
           )}
         </section>
-
         {items.length > 0 && (
           <section
             className="review-workspace"
@@ -455,20 +530,23 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
                   disabled={!canAnalyze}
                 >
                   <SparkIcon />
-                  {completedItems.length > 0
+                  {queuedItems.length === 0 && readyOrErrorItemCount === 0
                     ? 'Analyze again'
-                    : `Analyze ${items.length === 1 ? 'label' : `${items.length} labels`}`}
+                    : `Analyze ${(queuedItems.length || readyOrErrorItemCount) === 1 ? 'label' : `${queuedItems.length || readyOrErrorItemCount} labels`}`}
                 </button>
               </div>
             </div>
-
+            <ManifestImport
+              filenames={items.map((item) => item.file.name)}
+              disabled={isBusy}
+              onApply={applyManifest}
+            />
             {!canAnalyze && !isBusy && (
               <p className="form-hint">
-                Complete all four application fields for every label to analyze
-                the batch.
+                Complete all required application fields for a label to analyze
+                it. Completed unchanged labels are not analyzed again.
               </p>
             )}
-
             <div className="item-list">
               {items.map((item, index) => (
                 <ReviewItemCard
@@ -478,13 +556,14 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
                   onChange={updateValues}
                   onRemove={removeItem}
                   onRetry={(id) => void processItem(id)}
+                  onWarningFormatDecision={decideWarningFormat}
                   disabled={isBusy}
+                  valuesAreValid={valuesAreValid}
                 />
               ))}
             </div>
           </section>
         )}
-
         {completedItems.length > 0 && (
           <section className="batch-summary" aria-labelledby="summary-heading">
             <div>
@@ -504,7 +583,6 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
             </div>
           </section>
         )}
-
         <section className="scope-note" aria-labelledby="scope-heading">
           <div className="scope-rule" aria-hidden="true">
             Decision aid
@@ -519,7 +597,6 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
           </div>
         </section>
       </main>
-
       <footer>
         <span>Label Verifier · Local-first proof of concept</span>
         <a
@@ -531,227 +608,5 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
         </a>
       </footer>
     </div>
-  )
-}
-
-interface ReviewItemCardProps {
-  item: ReviewItem
-  index: number
-  onChange: (id: string, field: keyof ApplicationValues, value: string) => void
-  onRemove: (id: string) => void
-  onRetry: (id: string) => void
-  disabled: boolean
-}
-
-function ReviewItemCard({
-  item,
-  index,
-  onChange,
-  onRemove,
-  onRetry,
-  disabled,
-}: ReviewItemCardProps) {
-  const [textOpen, setTextOpen] = useState(false)
-  const status = item.checks ? overallStatus(item.checks) : undefined
-  const abvIsInvalid =
-    item.values.abv.trim().length > 0 &&
-    parseExpectedAbv(item.values.abv) === null
-  const netContentsIsInvalid =
-    item.values.netContents.trim().length > 0 &&
-    parseExpectedNetContents(item.values.netContents) === null
-  const fields: Array<{
-    key: keyof ApplicationValues
-    label: string
-    placeholder: string
-    suffix?: string
-  }> = [
-    { key: 'brand', label: 'Brand name', placeholder: "e.g. Stone's Throw" },
-    {
-      key: 'classType',
-      label: 'Class / type',
-      placeholder: 'e.g. Kentucky Straight Bourbon Whiskey',
-    },
-    { key: 'abv', label: 'Alcohol by volume', placeholder: '45', suffix: '%' },
-    { key: 'netContents', label: 'Net contents', placeholder: '750 mL' },
-  ]
-
-  return (
-    <article
-      className={`review-card review-card-${item.state}`}
-      aria-labelledby={`item-${item.id}`}
-    >
-      <header className="review-card-header">
-        <div className="file-identity">
-          <span className="file-number">
-            {String(index + 1).padStart(2, '0')}
-          </span>
-          <div>
-            <h3 id={`item-${item.id}`}>{item.file.name}</h3>
-            <p>
-              {(item.file.size / 1024 / 1024).toFixed(2)} MB ·{' '}
-              {item.file.type.replace('image/', '').toUpperCase()}
-            </p>
-          </div>
-        </div>
-        <div className="card-status-actions">
-          {status && <StatusBadge status={status} />}
-          <button
-            className="icon-button"
-            type="button"
-            aria-label={`Remove ${item.file.name}`}
-            onClick={() => onRemove(item.id)}
-            disabled={disabled}
-          >
-            <TrashIcon />
-          </button>
-        </div>
-      </header>
-
-      <div className="review-card-body">
-        <div className="image-column">
-          <img
-            src={item.previewUrl}
-            alt={`Uploaded label: ${item.file.name}`}
-          />
-          <span className="image-caption">
-            Original image · stays in browser
-          </span>
-          {item.checks && (
-            <ImageInspector
-              imageUrl={item.previewUrl}
-              fileName={item.file.name}
-            />
-          )}
-        </div>
-        <div className="fields-column">
-          <div className="application-fields">
-            {fields.map((field) => {
-              const inputId = `${item.id}-${field.key}`
-              const validationMessage =
-                field.key === 'abv' && abvIsInvalid
-                  ? 'Enter a complete number from 0 to 100.'
-                  : field.key === 'netContents' && netContentsIsInvalid
-                    ? 'Enter a positive number followed by mL, L, or fl oz.'
-                    : undefined
-              return (
-                <div
-                  key={field.key}
-                  className={
-                    field.key === 'classType' ? 'field-wide' : undefined
-                  }
-                >
-                  <label htmlFor={inputId}>{field.label}</label>
-                  <div
-                    className={field.suffix ? 'input-with-suffix' : undefined}
-                  >
-                    <input
-                      id={inputId}
-                      type={field.key === 'abv' ? 'number' : 'text'}
-                      inputMode={field.key === 'abv' ? 'decimal' : undefined}
-                      min={field.key === 'abv' ? '0' : undefined}
-                      max={field.key === 'abv' ? '100' : undefined}
-                      step={field.key === 'abv' ? '0.1' : undefined}
-                      value={item.values[field.key]}
-                      placeholder={field.placeholder}
-                      onChange={(event) =>
-                        onChange(item.id, field.key, event.target.value)
-                      }
-                      disabled={disabled}
-                      aria-invalid={validationMessage ? true : undefined}
-                      aria-describedby={
-                        validationMessage ? `${inputId}-error` : undefined
-                      }
-                      required
-                    />
-                    {field.suffix && (
-                      <span aria-hidden="true">{field.suffix}</span>
-                    )}
-                  </div>
-                  {validationMessage && (
-                    <span className="field-error" id={`${inputId}-error`}>
-                      {validationMessage}
-                    </span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {(item.state === 'queued' || item.state === 'processing') && (
-            <div className="progress-block" role="status" aria-live="polite">
-              <div className="progress-label">
-                <span>{item.progressLabel}</span>
-                <strong>{Math.round(item.progress * 100)}%</strong>
-              </div>
-              <div className="progress-track">
-                <span style={{ width: `${item.progress * 100}%` }} />
-              </div>
-            </div>
-          )}
-
-          {item.state === 'error' && (
-            <div className="item-error" role="alert">
-              <div>
-                <strong>Analysis stopped</strong>
-                <p>{item.error}</p>
-              </div>
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={() => onRetry(item.id)}
-                disabled={!valuesAreValid(item.values)}
-              >
-                Try again
-              </button>
-            </div>
-          )}
-
-          {item.result && item.checks && (
-            <div className="results-block">
-              <div className="results-heading">
-                <div>
-                  <p className="section-kicker">Step 3 · Review evidence</p>
-                  <h3>
-                    {status === 'mismatch'
-                      ? 'Differences found'
-                      : 'Manual review remains'}
-                  </h3>
-                </div>
-                <div
-                  className="ocr-metrics"
-                  aria-label={`OCR confidence ${Math.round(item.result.confidence)} percent, analyzed in ${formatDuration(item.result.durationMs)}`}
-                >
-                  <span>
-                    {Math.round(item.result.confidence)}% OCR confidence
-                  </span>
-                  <span>{formatDuration(item.result.durationMs)}</span>
-                </div>
-              </div>
-              <div className="check-list">
-                {item.checks.map((check) => (
-                  <CheckResult key={check.key} check={check} />
-                ))}
-              </div>
-              <button
-                className="extracted-toggle"
-                type="button"
-                aria-expanded={textOpen}
-                onClick={() => setTextOpen((open) => !open)}
-              >
-                View extracted label text{' '}
-                <ChevronIcon
-                  className={textOpen ? 'chevron-open' : undefined}
-                />
-              </button>
-              {textOpen && (
-                <pre className="extracted-text">
-                  {item.result.text || 'No text was extracted.'}
-                </pre>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </article>
   )
 }

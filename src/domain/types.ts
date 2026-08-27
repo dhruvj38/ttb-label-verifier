@@ -7,11 +7,15 @@ export interface ApplicationValues {
   classType: string
   abv: string
   netContents: string
+  nameAddress: string
+  productOrigin: 'domestic' | 'imported'
+  countryOfOrigin: string
 }
 
 export interface OcrResult {
   text: string
   confidence: number
+  warningConfidence?: number
   durationMs: number
 }
 
@@ -20,6 +24,8 @@ export type CheckKey =
   | 'classType'
   | 'abv'
   | 'netContents'
+  | 'nameAddress'
+  | 'countryOfOrigin'
   | 'warningText'
   | 'warningFormat'
 
@@ -43,8 +49,11 @@ export interface ReviewItem {
   progressLabel: string
   result?: OcrResult
   checks?: CheckResult[]
+  warningFormatDecision?: WarningFormatDecision
   error?: string
 }
+
+export type WarningFormatDecision = 'pass' | 'mismatch'
 
 export interface OcrEngine {
   warm(): Promise<number>
@@ -60,6 +69,9 @@ export const EMPTY_VALUES: ApplicationValues = {
   classType: '',
   abv: '',
   netContents: '',
+  nameAddress: '',
+  productOrigin: 'domestic',
+  countryOfOrigin: '',
 }
 
 export const SAMPLE_VALUES: ApplicationValues = {
@@ -67,4 +79,7 @@ export const SAMPLE_VALUES: ApplicationValues = {
   classType: 'Kentucky Straight Bourbon Whiskey',
   abv: '45',
   netContents: '750 mL',
+  nameAddress: 'Bottled by Old Tom Distillery, Frankfort, Kentucky',
+  productOrigin: 'domestic',
+  countryOfOrigin: '',
 }

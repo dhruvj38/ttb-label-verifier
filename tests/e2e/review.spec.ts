@@ -17,6 +17,10 @@ test('sample label runs through real same-origin OCR', async ({ page }) => {
   ).toBeVisible()
   await page.getByRole('button', { name: 'Try sample label' }).click()
   await expect(page.getByLabel('Brand name')).toHaveValue('OLD TOM DISTILLERY')
+  await expect(page.getByLabel('Name & address statement')).toHaveValue(
+    'Bottled by Old Tom Distillery, Frankfort, Kentucky',
+  )
+  await expect(page.getByLabel('Product origin')).toHaveValue('domestic')
   const netContents = page.getByLabel('Net contents')
   await netContents.fill('garbage 750 mL')
   await expect(netContents).toHaveAttribute('aria-invalid', 'true')
@@ -33,9 +37,7 @@ test('sample label runs through real same-origin OCR', async ({ page }) => {
   ).toBeEnabled()
   await page.getByRole('button', { name: 'Analyze label' }).click()
 
-  await expect(
-    page.getByText(/Manual review remains|Differences found/),
-  ).toBeVisible({
+  await expect(page.getByText('Manual review remains')).toBeVisible({
     timeout: 60_000,
   })
   await expect(page.getByText(/OCR confidence/)).toBeVisible()
@@ -44,13 +46,13 @@ test('sample label runs through real same-origin OCR', async ({ page }) => {
     page
       .locator('.check-result')
       .filter({ hasText: 'Brand name' })
-      .getByText('Needs review'),
+      .getByText('Pass'),
   ).toBeVisible()
   await expect(
     page
       .locator('.check-result')
       .filter({ hasText: 'Class / type' })
-      .getByText('Needs review'),
+      .getByText('Pass'),
   ).toBeVisible()
   const metrics = (await page.locator('.ocr-metrics').innerText()).replace(
     /\n/g,
@@ -73,6 +75,10 @@ test('sample label runs through real same-origin OCR', async ({ page }) => {
       .filter({ hasText: 'Warning format' })
       .getByText('Needs review'),
   ).toBeVisible()
+
+  await page.getByRole('button', { name: 'Confirm compliant' }).click()
+  await expect(page.getByText('All checks complete')).toBeVisible()
+  await expect(page.getByText('8 passed')).toBeVisible()
 
   await page.getByRole('button', { name: 'Inspect warning formatting' }).click()
   const inspection = page.getByRole('dialog', {

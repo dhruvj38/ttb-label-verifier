@@ -14,13 +14,13 @@ import type { ApplicationValues, CheckResult, CheckStatus } from './types'
 import { GOVERNMENT_WARNING } from './warning'
 
 function identityCheck(
-  key: 'brand' | 'classType',
+  key: 'brand' | 'classType' | 'nameAddress',
   label: string,
   expected: string,
-  otherExpectedIdentity: string,
+  otherExpectedIdentities: string[],
   text: string,
 ): CheckResult {
-  const evidence = findIdentityEvidence(text, expected, [otherExpectedIdentity])
+  const evidence = findIdentityEvidence(text, expected, otherExpectedIdentities)
 
   if (evidence.similarity === 1 && evidence.ambiguousContinuation) {
     return {
@@ -65,6 +65,63 @@ function identityCheck(
     observed: evidence.text,
     reason:
       'No complete OCR line or adjacent line group matches the application value.',
+  }
+}
+
+function countryOfOriginCheck(
+  values: ApplicationValues,
+  text: string,
+): CheckResult {
+  if (values.productOrigin === 'domestic') {
+    return {
+      key: 'countryOfOrigin',
+      label: 'Country of origin',
+      status: 'pass',
+      expected: 'Not required — domestic product',
+      observed: 'Application identifies this product as domestic.',
+      reason:
+        'Country of origin is required for imported distilled spirits only.',
+    }
+  }
+
+  const expected = values.countryOfOrigin.trim()
+  const candidates = [
+    expected,
+    `Product of ${expected}`,
+    `Produced in ${expected}`,
+    `Made in ${expected}`,
+  ]
+    .map((candidate) => findIdentityEvidence(text, candidate))
+    .sort((left, right) => right.similarity - left.similarity)
+  const evidence = candidates[0]!
+
+  if (evidence.similarity === 1 && !evidence.ambiguousContinuation) {
+    return {
+      key: 'countryOfOrigin',
+      label: 'Country of origin',
+      status: 'pass',
+      expected,
+      observed: evidence.text,
+      reason: 'A complete country-of-origin statement matches the application.',
+    }
+  }
+  if (evidence.similarity >= 0.78) {
+    return {
+      key: 'countryOfOrigin',
+      label: 'Country of origin',
+      status: 'review',
+      expected,
+      observed: evidence.text,
+      reason: `The closest complete origin statement is similar (${Math.round(evidence.similarity * 100)}%) but needs human review.`,
+    }
+  }
+  return {
+    key: 'countryOfOrigin',
+    label: 'Country of origin',
+    status: 'mismatch',
+    expected,
+    observed: evidence.text,
+    reason: 'No complete country-of-origin statement matches the application.',
   }
 }
 
@@ -198,14 +255,22 @@ export function evaluateLabel(
   values: ApplicationValues,
   text: string,
   confidence: number,
+  warningConfidence = confidence,
 ): CheckResult[] {
+  const identities = [values.brand, values.classType, values.nameAddress]
   return [
-    identityCheck('brand', 'Brand name', values.brand, values.classType, text),
+    identityCheck(
+      'brand',
+      'Brand name',
+      values.brand,
+      identities.filter((identity) => identity !== values.brand),
+      text,
+    ),
     identityCheck(
       'classType',
       'Class / type',
       values.classType,
-      values.brand,
+      identities.filter((identity) => identity !== values.classType),
       text,
     ),
     numericCheck(
@@ -222,7 +287,15 @@ export function evaluateLabel(
       parseExpectedNetContents(values.netContents),
       extractNetContents(text),
     ),
-    warningTextCheck(text, confidence),
+    identityCheck(
+      'nameAddress',
+      'Name & address statement',
+      values.nameAddress,
+      identities.filter((identity) => identity !== values.nameAddress),
+      text,
+    ),
+    countryOfOriginCheck(values, text),
+    warningTextCheck(text, warningConfidence),
     {
       key: 'warningFormat',
       label: 'Warning format',
@@ -234,6 +307,36 @@ export function evaluateLabel(
         'A photograph cannot establish bold weight, separation, contrast, or physical type size reliably.',
     },
   ]
+}
+
+export function applyWarningFormatDecision(
+  checks: CheckResult[],
+  decision?: 'pass' | 'mismatch',
+): CheckResult[] {
+  return checks.map((check) => {
+    if (check.key !== 'warningFormat') return check
+    if (!decision) {
+      return {
+        ...check,
+        status: 'review',
+        observed: 'Inspect the label image',
+        reason:
+          'A photograph cannot establish bold weight, separation, contrast, or physical type size reliably.',
+      }
+    }
+    return {
+      ...check,
+      status: decision,
+      observed:
+        decision === 'pass'
+          ? 'Reviewer confirmed the required warning formatting from the label image.'
+          : 'Reviewer flagged a warning-formatting problem on the label image.',
+      reason:
+        decision === 'pass'
+          ? 'Manual reviewer decision: compliant. This records a human inspection; OCR did not verify physical type size or boldness.'
+          : 'Manual reviewer decision: formatting problem found. OCR did not determine this result.',
+    }
+  })
 }
 
 export function overallStatus(checks: CheckResult[]): CheckStatus {

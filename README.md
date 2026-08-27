@@ -4,7 +4,7 @@
 
 **Source:** [https://github.com/dhruvj38/ttb-label-verifier](https://github.com/dhruvj38/ttb-label-verifier)
 
-Label Verifier is a local-first proof of concept that helps a compliance reviewer compare distilled-spirits label artwork with submitted application values. It extracts text in the browser, checks six focused rules, and shows the application value beside the observed label evidence. It is a decision aid, not an official TTB approval tool.
+Label Verifier is a local-first proof of concept that helps a compliance reviewer compare distilled-spirits label artwork with submitted application values. It extracts text in the browser, checks eight focused rules, and shows the application value beside the observed label evidence. It is a decision aid, not an official TTB approval tool.
 
 ## Try the demo
 
@@ -12,15 +12,28 @@ Label Verifier is a local-first proof of concept that helps a compliance reviewe
 2. Select **Try sample label**. The sample application values are filled in automatically.
 3. Select **Analyze label**.
 4. Review each Pass, Mismatch, or Needs review result and its evidence. Use **Inspect warning formatting** to zoom and pan the original label for the manual typography check.
+5. After that inspection, select **Confirm compliant** to record a human warning-format decision. The sample then reaches eight passes; select **Clear manual decision** to return that check to Needs review.
 
 For your own image, choose or drop a JPEG, PNG, or WebP label and enter:
 
 - brand name;
 - class/type;
 - alcohol by volume as a numeric percentage; and
-- net contents with a supported unit (`mL`, `L`, or `fl oz`).
+- net contents with a supported unit (`mL`, `L`, or `fl oz`);
+- the complete bottler, producer, or importer name-and-address statement; and
+- whether the product is domestic or imported, plus country of origin for an import.
 
 Multiple images can be added together. The browser processes them sequentially with one reused OCR worker so a large selection does not decode every full-resolution image at once.
+
+### CSV manifests for large batches
+
+For a 200–300-image review, use **Download template** beside the application fields, populate it offline, then choose **Import CSV manifest**. The browser accepts exactly these columns:
+
+```csv
+filename,brand,class_type,abv,net_contents,name_address,origin,country_of_origin
+```
+
+Headers and filename matching are case-insensitive. Standard quoted CSV fields, escaped quotes, CRLF/LF line endings, and a UTF-8 BOM are supported. Import is all-or-nothing: it reports row-numbered schema/value problems, duplicate or ambiguous filenames, rows without a selected image, and selected images without a row before changing any application values. No manifest or image leaves the browser.
 
 ## Run locally
 
@@ -65,12 +78,13 @@ Tesseract's worker, WebAssembly core, and English language data are bundled unde
 
 ### Matching policy
 
-- Brand and class/type comparisons normalize Unicode, apostrophe variants, case, and repeated whitespace. A pass requires one complete OCR line or adjacent line group to match the application value; a substring alone cannot pass. `STONE'S THROW` and `Stone's Throw` pass.
+- Brand, class/type, and name/address comparisons normalize Unicode, apostrophe variants, case, and repeated whitespace. A pass requires one complete OCR line or adjacent line group to match the application value; a substring alone cannot pass. `STONE'S THROW` and `Stone's Throw` pass.
 - A close but non-equivalent identity match becomes **Needs review**, never an automatic pass.
 - ABV is compared as the numeric alcohol-by-volume percentage; proof alone is not treated as ABV.
 - Net contents are normalized to milliliters before comparison.
-- The warning can pass only when its complete § 16.21 text, punctuation, capitalization, and uppercase prefix appear after line-break whitespace normalization. Near OCR matches or low-confidence text require review.
-- Warning typography and physical presentation always require manual review. The interface provides a keyboard-accessible 100–300% zoom and pannable original image, but an unscaled photograph cannot prove bold weight, physical type size, separation, contrast, or ordinary-condition legibility.
+- Country of origin is marked not applicable for a domestic application. An imported application must provide a country, which can match a standalone line or a complete `Product of`, `Produced in`, or `Made in` statement.
+- The warning can pass only when its complete § 16.21 text, punctuation, capitalization, and uppercase prefix appear after line-break whitespace normalization. Near OCR matches or low-confidence text require review. Its automatic confidence gate uses the warning lines rather than the whole-image average when line-level OCR data is available.
+- Warning typography and physical presentation start as **Needs review**. The interface provides a keyboard-accessible 100–300% zoom and pannable original image, then records an explicit in-memory reviewer decision as compliant or a formatting problem. OCR never claims it proved bold weight, physical type size, separation, contrast, or ordinary-condition legibility.
 
 ## Tools
 
@@ -83,7 +97,7 @@ Tesseract's worker, WebAssembly core, and English language data are bundled unde
 
 ## Privacy and security
 
-Uploaded pixels remain inside the browser. The application creates temporary object URLs for previews, prepares an in-memory OCR image, and releases preview URLs when items are removed or the session is reset. It does not send label data to a server or persist review data between page loads.
+Uploaded pixels remain inside the browser. The application creates temporary object URLs for previews, prepares an in-memory OCR image, and releases preview URLs when items are removed or the session is reset. CSV values and manual warning decisions exist only in the current in-memory review state; it does not send label data to a server or persist review data between page loads.
 
 The end-to-end OCR test records every browser request during analysis and fails if a request leaves the local origin (excluding browser-local `blob:` and `data:` URLs).
 
@@ -91,16 +105,20 @@ The end-to-end OCR test records every browser request during analysis and fails 
 
 The OCR worker begins warming after the initial render and is reused across the batch. Images larger than 2,200 pixels on either axis are downscaled before recognition. The UI reports both worker-ready and per-image recognition time rather than claiming a fixed service level.
 
-On the included 1,400 × 1,800 high-contrast sample, the production Chromium smoke test completed OCR in **2.8 seconds** after an approximately **0.3 second** worker warm-up on the development machine. Hardware, browser cache, image size, glare, curvature, and text density materially affect timing; the stakeholder's roughly five-second goal is a target, not a guarantee.
+On the included 1,400 × 1,800 high-contrast sample, the production Chromium smoke test completed OCR in **2.2 seconds** after an approximately **0.3 second** worker warm-up on the development machine. Hardware, browser cache, image size, glare, curvature, and text density materially affect timing; the stakeholder's roughly five-second goal is a target, not a guarantee.
+
+### Where a local vision model could help
+
+The current prototype intentionally pairs local OCR with deterministic, auditable rules. A production discovery phase should benchmark a small quantized vision model running locally through WebGPU as a second tier for perspective correction, decorative lettering, glare/curvature detection, and field-region proposals. It should never silently replace the rules: the model would return candidate regions and quality signals, OCR would produce reviewable text, and the same comparison layer would decide Pass, Mismatch, or Needs review. A confidence-gated fallback preserves the no-outbound-traffic constraint while keeping model uncertainty visible to agents. Adoption would depend on measured accuracy, memory use, cold-start time, browser support, and accessibility—not an “AI” label alone.
 
 ## Assumptions and scope
 
 - The automated rules are scoped to the assignment's distilled-spirits example. Beer and wine have different requirements and are not represented as supported.
 - Application data is entered manually because this standalone prototype does not integrate with COLA.
-- JPEG, PNG, and WebP images up to 12 MB are supported. PDF, HEIC, camera capture, CSV manifests, perspective correction, and COLA/API integration are out of scope.
-- “Batch” means multi-file selection or drop with one application record per image, a bounded sequential queue, per-item progress, retry/removal, and a result summary.
+- JPEG, PNG, and WebP images up to 12 MB are supported. PDF, HEIC, camera capture, perspective correction, and COLA/API integration are out of scope.
+- “Batch” means multi-file selection or drop, optional atomic local CSV value import, one application record per image, a bounded sequential queue, per-item progress, retry/removal, and a result summary. Completed unchanged records are not sent through OCR again when new ready records are analyzed.
 - OCR is assistive. Poor photography, decorative lettering, bottle curvature, glare, and unusual layouts can reduce extraction quality. Ambiguous evidence is intentionally routed to a person.
-- A manual reviewer must still evaluate all requirements outside the six checks shown here, including producer/importer details, country of origin where applicable, and warning presentation.
+- A manual reviewer must still evaluate requirements outside the eight checks shown here, including conditional disclosures, same-field-of-vision placement, physical type sizes, and warning presentation.
 
 ## Project structure
 
@@ -123,6 +141,7 @@ public/         Deterministic sample artwork
 - [27 CFR § 16.21 — Mandatory statement](https://www.ecfr.gov/current/title-27/chapter-I/subchapter-A/part-16/subpart-C/section-16.21)
 - [27 CFR § 16.22 — General requirements](https://www.ecfr.gov/current/title-27/chapter-I/subchapter-A/part-16/subpart-C/section-16.22)
 - [TTB — Anatomy of a distilled spirits label](https://www.ttb.gov/regulated-commodities/beverage-alcohol/distilled-spirits/ds-labeling-home/anatomy-of-a-distilled-spirits-label-tool)
+- [TTB — Distilled spirits name and address](https://www.ttb.gov/regulated-commodities/beverage-alcohol/distilled-spirits/ds-labeling-home/ds-name-address)
 
 ## Limitations
 

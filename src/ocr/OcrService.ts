@@ -4,6 +4,40 @@ import { preprocessImage } from './preprocess'
 
 type ProgressListener = (progress: number, label: string) => void
 
+function warningRegionConfidence(
+  blocks: Awaited<ReturnType<Worker['recognize']>>['data']['blocks'],
+): number | undefined {
+  const lines =
+    blocks
+      ?.flatMap((block) => block.paragraphs)
+      .flatMap((paragraph) => paragraph.lines)
+      .sort((left, right) => left.bbox.y0 - right.bbox.y0) ?? []
+  const start = lines.findIndex((line) =>
+    /government\s+warning\s*:/i.test(line.text),
+  )
+  if (start < 0) return undefined
+
+  const warningLines = []
+  let characterCount = 0
+  for (const line of lines.slice(start)) {
+    warningLines.push(line)
+    characterCount += line.text.trim().length
+    if (characterCount >= 310) break
+  }
+  const weight = warningLines.reduce(
+    (total, line) => total + Math.max(1, line.text.trim().length),
+    0,
+  )
+  if (!weight) return undefined
+  return (
+    warningLines.reduce(
+      (total, line) =>
+        total + line.confidence * Math.max(1, line.text.trim().length),
+      0,
+    ) / weight
+  )
+}
+
 function readableStatus(status: string): string {
   const labels: Record<string, string> = {
     'loading tesseract core': 'Loading OCR engine',
@@ -37,11 +71,16 @@ export class BrowserOcrService implements OcrEngine {
 
     try {
       const worker = await this.getWorker()
-      const result = await worker.recognize(image)
+      const result = await worker.recognize(
+        image,
+        {},
+        { blocks: true, text: true },
+      )
       onProgress?.(1, 'Analysis complete')
       return {
         text: result.data.text,
         confidence: result.data.confidence,
+        warningConfidence: warningRegionConfidence(result.data.blocks),
         durationMs: performance.now() - startedAt,
       }
     } finally {

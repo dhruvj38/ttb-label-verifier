@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateLabel, overallStatus } from '../../src/domain/rules'
+import {
+  applyWarningFormatDecision,
+  evaluateLabel,
+  overallStatus,
+} from '../../src/domain/rules'
 import { GOVERNMENT_WARNING } from '../../src/domain/warning'
 import type { ApplicationValues } from '../../src/domain/types'
 
@@ -8,6 +12,9 @@ const expected: ApplicationValues = {
   classType: 'Kentucky Straight Bourbon Whiskey',
   abv: '45',
   netContents: '750 mL',
+  nameAddress: 'Bottled by Stone Throw Spirits, Louisville, Kentucky',
+  productOrigin: 'domestic',
+  countryOfOrigin: '',
 }
 
 const validText = `
@@ -15,6 +22,7 @@ const validText = `
 STONE'S THROW
 750 mL
 Kentucky Straight Bourbon Whiskey
+Bottled by Stone Throw Spirits, Louisville, Kentucky
 ${GOVERNMENT_WARNING}
 `
 
@@ -29,6 +37,12 @@ describe('label rules', () => {
     expect(checks.find((check) => check.key === 'netContents')?.status).toBe(
       'pass',
     )
+    expect(checks.find((check) => check.key === 'nameAddress')?.status).toBe(
+      'pass',
+    )
+    expect(
+      checks.find((check) => check.key === 'countryOfOrigin')?.status,
+    ).toBe('pass')
     expect(checks.find((check) => check.key === 'warningText')?.status).toBe(
       'pass',
     )
@@ -228,6 +242,7 @@ ${GOVERNMENT_WARNING}
 `
     const checks = evaluateLabel(
       {
+        ...expected,
         brand: 'OLD TOM',
         classType: 'BOURBON WHISKEY',
         abv: '45',
@@ -240,6 +255,30 @@ ${GOVERNMENT_WARNING}
     expect(checks.find((item) => item.key === 'classType')?.status).toBe(
       'review',
     )
+  })
+
+  it('requires imported country-of-origin evidence and accepts a complete origin statement', () => {
+    const imported = {
+      ...expected,
+      productOrigin: 'imported' as const,
+      countryOfOrigin: 'France',
+    }
+    const pass = evaluateLabel(imported, `${validText}\nProduct of France`, 94)
+    expect(pass.find((check) => check.key === 'countryOfOrigin')?.status).toBe(
+      'pass',
+    )
+
+    const mismatch = evaluateLabel(imported, validText, 94)
+    expect(
+      mismatch.find((check) => check.key === 'countryOfOrigin')?.status,
+    ).toBe('mismatch')
+  })
+
+  it('uses warning-region confidence instead of whole-image confidence when provided', () => {
+    const checks = evaluateLabel(expected, validText, 94, 62)
+    const warning = checks.find((check) => check.key === 'warningText')
+    expect(warning?.status).toBe('review')
+    expect(warning?.confidence).toBe(62)
   })
 
   it('does not pass an exact class line when adjacent text plausibly continues it', () => {
@@ -418,6 +457,28 @@ ${GOVERNMENT_WARNING}
       'review',
     )
     expect(overallStatus(checks)).toBe('review')
+  })
+
+  it('allows only an explicit reviewer decision to resolve warning format', () => {
+    const checks = evaluateLabel(expected, validText, 94)
+    const compliant = applyWarningFormatDecision(checks, 'pass')
+    expect(
+      compliant.find((check) => check.key === 'warningFormat'),
+    ).toMatchObject({
+      status: 'pass',
+      reason: expect.stringContaining('Manual reviewer decision'),
+    })
+    expect(overallStatus(compliant)).toBe('pass')
+    expect(
+      applyWarningFormatDecision(compliant, 'mismatch').find(
+        (check) => check.key === 'warningFormat',
+      )?.status,
+    ).toBe('mismatch')
+    expect(
+      applyWarningFormatDecision(compliant).find(
+        (check) => check.key === 'warningFormat',
+      )?.status,
+    ).toBe('review')
   })
 
   it('routes exact low-confidence OCR to review', () => {

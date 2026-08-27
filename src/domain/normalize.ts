@@ -72,6 +72,13 @@ function plausiblyContinues(value: string) {
   if (/%/.test(value) || /^\s*government\s+warning\s*:/i.test(value)) {
     return false
   }
+  if (
+    /^\s*(?:bottled|distilled|produced|manufactured|processed|imported|packed|filled)\s+(?:by|for)\b/i.test(
+      value,
+    )
+  ) {
+    return false
+  }
   return !/^\s*\d+(?:\.\d+)?\s*(?:m\s*l|millilit(?:er|re)s?|l(?:iter|itre)?s?|fl\.?\s*oz\.?)\s*$/i.test(
     value,
   )
@@ -83,6 +90,10 @@ export function findIdentityEvidence(
   knownSeparateIdentities: string[] = [],
 ): IdentityEvidence {
   const normalizedExpected = normalizeIdentity(expected)
+  const expectedIsNameAddress =
+    /^(?:bottled|distilled|produced|manufactured|processed|imported|packed|filled)\s+(?:by|for)\b/.test(
+      normalizedExpected,
+    )
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -115,7 +126,10 @@ export function findIdentityEvidence(
         start + lineCount < lines.length &&
         plausiblyContinues(lines[start + lineCount]!)
       const previousContinues =
-        similarity === 1 && start > 0 && plausiblyContinues(lines[start - 1]!)
+        similarity === 1 &&
+        !expectedIsNameAddress &&
+        start > 0 &&
+        plausiblyContinues(lines[start - 1]!)
       const ambiguousContinuation =
         similarity === 1 && (previousContinues || nextContinues)
       const contextStart = previousContinues ? start - 1 : start

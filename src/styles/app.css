@@ -535,6 +535,78 @@ footer {
   font-size: 13px;
 }
 
+.manifest-import {
+  display: flex;
+  justify-content: space-between;
+  gap: 22px;
+  align-items: center;
+  margin-top: 22px;
+  padding: 17px 18px;
+  border: 1px solid #cbd6db;
+  background: #f4f7f8;
+}
+
+.manifest-import h3 {
+  margin: 0;
+  color: var(--navy);
+  font-size: 15px;
+}
+
+.manifest-import p:not(.section-kicker) {
+  max-width: 620px;
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.manifest-actions,
+.warning-decision > div {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.template-link {
+  padding: 7px 0;
+  border: 0;
+  color: var(--blue);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.manifest-message {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 11px 13px;
+  border-left: 3px solid var(--red);
+  color: #6f2b24;
+  background: var(--red-soft);
+  font-size: 12px;
+}
+
+.manifest-import:has(.manifest-message) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.manifest-message ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.manifest-success {
+  border-left-color: var(--green);
+  color: #185f3b;
+  background: var(--green-soft);
+}
+
 .item-list {
   display: grid;
   gap: 20px;
@@ -699,7 +771,8 @@ footer {
   box-shadow: 0 0 0 1px var(--red);
 }
 
-.application-fields input {
+.application-fields input,
+.application-fields select {
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
@@ -714,7 +787,8 @@ footer {
   color: #87969e;
 }
 
-.application-fields input:disabled {
+.application-fields input:disabled,
+.application-fields select:disabled {
   color: #5f6d74;
   background: #f3f5f6;
 }
@@ -940,6 +1014,25 @@ footer {
   font-size: 12px;
   line-height: 1.45;
   white-space: pre-wrap;
+}
+
+.warning-decision {
+  margin-top: 14px;
+  padding: 13px;
+  border: 1px solid #d4dee2;
+  background: #f5f8f9;
+}
+
+.warning-decision p {
+  margin: 0 0 10px;
+  color: #536671;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.warning-decision .button[aria-pressed='true'] {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(40, 94, 120, 0.16);
 }
 
 .extracted-toggle {
@@ -1285,6 +1378,18 @@ footer a {
 
   .workspace-actions {
     justify-content: space-between;
+  }
+
+  .manifest-import,
+  .manifest-import:has(.manifest-message) {
+    display: flex;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .manifest-actions {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .review-card-header {
