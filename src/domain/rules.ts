@@ -30,7 +30,7 @@ function identityCheck(
       expected,
       observed: evidence.text,
       reason:
-        'One OCR line matches, but adjacent text may continue the identity. Review the complete label name.',
+        'An OCR line group matches, but adjacent text may continue the identity. Review the complete label name.',
     }
   }
 

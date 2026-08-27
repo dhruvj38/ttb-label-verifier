@@ -111,6 +111,57 @@ describe('label rules', () => {
     },
   )
 
+  it.each([
+    [['OLD', 'TOM', 'DISTILLERY'], 'OLD TOM', 'OLD TOM DISTILLERY'],
+    [['Old', 'Tom', '1792 DISTILLERY'], 'Old Tom', 'Old Tom 1792 DISTILLERY'],
+    [
+      ['OLD', 'TOM', 'THE OLD DISTILLERY COMPANY'],
+      'OLD TOM',
+      'OLD TOM THE OLD DISTILLERY COMPANY',
+    ],
+  ])(
+    'reviews multi-line fragment %j and passes complete value %j',
+    (lines, fragmentBrand, fullBrand) => {
+      const splitText = validText.replace("STONE'S THROW", lines.join('\n'))
+      const fragment = evaluateLabel(
+        { ...expected, brand: fragmentBrand },
+        splitText,
+        94,
+      ).find((item) => item.key === 'brand')
+      expect(fragment?.status).toBe('review')
+      expect(fragment?.observed).toBe(lines.join('\n'))
+
+      const full = evaluateLabel(
+        { ...expected, brand: fullBrand },
+        splitText,
+        94,
+      ).find((item) => item.key === 'brand')
+      expect(full?.status).toBe('pass')
+      expect(full?.observed).toBe(lines.join('\n'))
+    },
+  )
+
+  it('reviews a multi-line class fragment and passes its complete group', () => {
+    const lines = ['Kentucky', 'Straight', 'Bourbon Whiskey']
+    const splitText = validText.replace(
+      'Kentucky Straight Bourbon Whiskey',
+      lines.join('\n'),
+    )
+    const fragment = evaluateLabel(
+      { ...expected, classType: 'Kentucky Straight' },
+      splitText,
+      94,
+    ).find((item) => item.key === 'classType')
+    expect(fragment?.status).toBe('review')
+    expect(fragment?.observed).toBe(lines.join('\n'))
+
+    const full = evaluateLabel(expected, splitText, 94).find(
+      (item) => item.key === 'classType',
+    )
+    expect(full?.status).toBe('pass')
+    expect(full?.observed).toBe(lines.join('\n'))
+  })
+
   it('does not pass an exact class line when adjacent text plausibly continues it', () => {
     const splitText = validText.replace(
       'Kentucky Straight Bourbon Whiskey',

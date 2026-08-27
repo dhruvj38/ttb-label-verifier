@@ -101,22 +101,19 @@ export function findIdentityEvidence(
         normalizeIdentity(evidenceLines.join(' ')),
         normalizedExpected,
       )
-      const previousContinues =
-        lineCount === 1 &&
-        similarity === 1 &&
-        start > 0 &&
-        plausiblyContinues(lines[start - 1]!, knownSeparateLines.has(start - 1))
       const nextContinues =
-        lineCount === 1 &&
         similarity === 1 &&
-        start + 1 < lines.length &&
-        plausiblyContinues(lines[start + 1]!, knownSeparateLines.has(start + 1))
-      const ambiguousContinuation =
-        similarity === 1 && (previousContinues || nextContinues)
-      const contextStart = previousContinues ? start - 1 : start
-      const contextEnd = nextContinues ? start + 2 : start + lineCount
+        start + lineCount < lines.length &&
+        plausiblyContinues(
+          lines[start + lineCount]!,
+          knownSeparateLines.has(start + lineCount),
+        )
+      const ambiguousContinuation = similarity === 1 && nextContinues
+      const contextEnd = nextContinues
+        ? start + lineCount + 1
+        : start + lineCount
       const candidate: IdentityEvidence = {
-        text: lines.slice(contextStart, contextEnd).join('\n'),
+        text: lines.slice(start, contextEnd).join('\n'),
         similarity,
         ambiguousContinuation,
       }

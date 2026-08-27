@@ -32,6 +32,7 @@ describe('similarity helpers', () => {
     const evidence = findIdentityEvidence(
       'OLD TOM DISTILLERY\nKentucky Straight\nBourbon Whiskey\n45% Alc./Vol.',
       'Kentucky Straight Bourbon Whiskey',
+      ['OLD TOM DISTILLERY'],
     )
     expect(evidence.similarity).toBe(1)
     expect(evidence.text).toBe('Kentucky Straight\nBourbon Whiskey')
@@ -56,6 +57,21 @@ describe('similarity helpers', () => {
     },
   )
 
+  it.each([
+    [['OLD', 'TOM', 'DISTILLERY'], 'OLD TOM'],
+    [['Kentucky', 'Straight', 'Bourbon Whiskey'], 'Kentucky Straight'],
+    [['Old', 'Tom', '1792 DISTILLERY'], 'Old Tom'],
+    [['OLD', 'TOM', 'THE OLD DISTILLERY COMPANY'], 'OLD TOM'],
+  ])(
+    'marks exact multi-line fragment %j as ambiguous for %j',
+    (lines, expected) => {
+      const evidence = findIdentityEvidence(lines.join('\n'), expected)
+      expect(evidence.similarity).toBe(1)
+      expect(evidence.text).toBe(lines.join('\n'))
+      expect(evidence.ambiguousContinuation).toBe(true)
+    },
+  )
+
   it('does not treat a separately supplied identity as a continuation', () => {
     const evidence = findIdentityEvidence(
       "STONE'S THROW\nKentucky Straight Bourbon Whiskey\n45% Alc./Vol.",
@@ -66,6 +82,28 @@ describe('similarity helpers', () => {
     expect(evidence.text).toBe("STONE'S THROW")
     expect(evidence.ambiguousContinuation).toBe(false)
   })
+
+  it.each([
+    ['OLD\nTOM\n45% Alc./Vol.', []],
+    ['OLD\nTOM\n750 mL', []],
+    ['OLD\nTOM\nGOVERNMENT WARNING: required statement', []],
+    [
+      'OLD\nTOM\nKentucky\nStraight\nBourbon Whiskey',
+      ['Kentucky Straight Bourbon Whiskey'],
+    ],
+  ])(
+    'does not make complete multi-line evidence ambiguous before a separate field in %j',
+    (text, knownSeparateIdentities) => {
+      const evidence = findIdentityEvidence(
+        text,
+        'OLD TOM',
+        knownSeparateIdentities,
+      )
+      expect(evidence.similarity).toBe(1)
+      expect(evidence.text).toBe('OLD\nTOM')
+      expect(evidence.ambiguousContinuation).toBe(false)
+    },
+  )
 
   it('returns zero when either side is empty', () => {
     expect(levenshteinSimilarity('', 'label')).toBe(0)
