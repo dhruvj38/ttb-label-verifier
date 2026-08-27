@@ -6,9 +6,8 @@ import {
   parseExpectedNetContents,
 } from './extract'
 import {
-  findClosestLine,
+  findIdentityEvidence,
   levenshteinSimilarity,
-  normalizeIdentity,
   normalizeWarningLayout,
 } from './normalize'
 import type { ApplicationValues, CheckResult, CheckStatus } from './types'
@@ -20,30 +19,28 @@ function identityCheck(
   expected: string,
   text: string,
 ): CheckResult {
-  const normalizedText = normalizeIdentity(text)
-  const normalizedExpected = normalizeIdentity(expected)
+  const evidence = findIdentityEvidence(text, expected)
 
-  if (normalizedText.includes(normalizedExpected)) {
+  if (evidence.similarity === 1) {
     return {
       key,
       label,
       status: 'pass',
       expected,
-      observed: findClosestLine(text, expected).text,
+      observed: evidence.text,
       reason:
-        'The label contains the application value after normalizing case, spacing, and apostrophes.',
+        'A complete OCR line or adjacent line group matches after normalizing case, spacing, and apostrophes.',
     }
   }
 
-  const closest = findClosestLine(text, expected)
-  if (closest.similarity >= 0.78) {
+  if (evidence.similarity >= 0.78) {
     return {
       key,
       label,
       status: 'review',
       expected,
-      observed: closest.text,
-      reason: `The closest label text is similar (${Math.round(closest.similarity * 100)}%) but not an exact normalized match.`,
+      observed: evidence.text,
+      reason: `The closest complete text candidate is similar (${Math.round(evidence.similarity * 100)}%) but not an exact normalized match.`,
     }
   }
 
@@ -52,8 +49,9 @@ function identityCheck(
     label,
     status: 'mismatch',
     expected,
-    observed: closest.text,
-    reason: 'The application value was not found in the extracted label text.',
+    observed: evidence.text,
+    reason:
+      'No complete OCR line or adjacent line group matches the application value.',
   }
 }
 

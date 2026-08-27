@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  findClosestLine,
+  findIdentityEvidence,
   levenshteinSimilarity,
   normalizeIdentity,
 } from '../../src/domain/normalize'
@@ -19,13 +19,22 @@ describe('identity normalization', () => {
 
 describe('similarity helpers', () => {
   it('finds the closest line without treating a near match as exact', () => {
-    const closest = findClosestLine(
+    const closest = findIdentityEvidence(
       'SMALL BATCH\nOLD TON DISTILLERY\nKENTUCKY',
       'Old Tom Distillery',
     )
     expect(closest.text).toBe('OLD TON DISTILLERY')
     expect(closest.similarity).toBeGreaterThan(0.9)
     expect(closest.similarity).toBeLessThan(1)
+  })
+
+  it('combines adjacent OCR lines as complete supporting evidence', () => {
+    const evidence = findIdentityEvidence(
+      'OLD TOM DISTILLERY\nKentucky Straight\nBourbon Whiskey\n45% Alc./Vol.',
+      'Kentucky Straight Bourbon Whiskey',
+    )
+    expect(evidence.similarity).toBe(1)
+    expect(evidence.text).toBe('Kentucky Straight\nBourbon Whiskey')
   })
 
   it('returns zero when either side is empty', () => {

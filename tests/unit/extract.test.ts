@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   extractAbv,
   extractNetContents,
+  parseExpectedAbv,
   parseExpectedNetContents,
 } from '../../src/domain/extract'
 
@@ -16,6 +17,30 @@ describe('ABV extraction', () => {
 
   it('does not treat proof as ABV', () => {
     expect(extractAbv('90 Proof')).toEqual([])
+  })
+
+  it.each([
+    '450',
+    '450%',
+    '45abc',
+    '45%%',
+    '-1',
+    'NaN',
+    'Infinity',
+    '1e309',
+    '',
+  ])('rejects invalid application ABV %j', (value) => {
+    expect(parseExpectedAbv(value)).toBeNull()
+  })
+
+  it.each([
+    ['45', 45],
+    ['45%', 45],
+    [' 45.5 % ', 45.5],
+    ['1e2', 100],
+    ['0', 0],
+  ])('accepts complete in-range application ABV %j', (value, expected) => {
+    expect(parseExpectedAbv(value)).toBe(expected)
   })
 })
 

@@ -43,6 +43,26 @@ describe('label rules', () => {
     expect(checks.find((check) => check.key === 'brand')?.status).toBe('review')
   })
 
+  it('does not pass an application identity that is only a label substring', () => {
+    const checks = evaluateLabel({ ...expected, brand: 'THROW' }, validText, 94)
+    expect(checks.find((check) => check.key === 'brand')?.status).not.toBe(
+      'pass',
+    )
+  })
+
+  it('passes a complete identity split across adjacent lines and shows both', () => {
+    const check = evaluateLabel(
+      expected,
+      validText.replace(
+        'Kentucky Straight Bourbon Whiskey',
+        'Kentucky Straight\nBourbon Whiskey',
+      ),
+      94,
+    ).find((item) => item.key === 'classType')
+    expect(check?.status).toBe('pass')
+    expect(check?.observed).toBe('Kentucky Straight\nBourbon Whiskey')
+  })
+
   it('reports conflicting ABV and net contents as mismatches', () => {
     const checks = evaluateLabel(
       expected,
@@ -55,6 +75,15 @@ describe('label rules', () => {
     expect(checks.find((check) => check.key === 'netContents')?.status).toBe(
       'mismatch',
     )
+  })
+
+  it('never passes malformed or out-of-range application ABV values', () => {
+    for (const abv of ['450%', '45abc', 'Infinity']) {
+      const check = evaluateLabel({ ...expected, abv }, validText, 94).find(
+        (item) => item.key === 'abv',
+      )
+      expect(check?.status).toBe('review')
+    }
   })
 
   it('allows line-break whitespace but not title-case warning prefix to pass', () => {

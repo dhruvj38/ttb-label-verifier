@@ -15,6 +15,8 @@ import {
   UploadIcon,
 } from '../components/icons'
 import { StatusBadge } from '../components/StatusBadge'
+import { ImageInspector } from '../components/ImageInspector'
+import { parseExpectedAbv } from '../domain/extract'
 import { evaluateLabel, overallStatus, statusCounts } from '../domain/rules'
 import {
   EMPTY_VALUES,
@@ -42,8 +44,11 @@ function validateFile(file: File): string | null {
   return null
 }
 
-function valuesAreComplete(values: ApplicationValues): boolean {
-  return Object.values(values).every((value) => value.trim().length > 0)
+function valuesAreValid(values: ApplicationValues): boolean {
+  return (
+    Object.values(values).every((value) => value.trim().length > 0) &&
+    parseExpectedAbv(values.abv) !== null
+  )
 }
 
 function formatDuration(durationMs: number): string {
@@ -103,7 +108,7 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
   const canAnalyze =
     items.length > 0 &&
     !isBusy &&
-    items.every((item) => valuesAreComplete(item.values))
+    items.every((item) => valuesAreValid(item.values))
 
   const batchStatus = useMemo(() => {
     if (isBusy)
@@ -547,6 +552,9 @@ function ReviewItemCard({
 }: ReviewItemCardProps) {
   const [textOpen, setTextOpen] = useState(false)
   const status = item.checks ? overallStatus(item.checks) : undefined
+  const abvIsInvalid =
+    item.values.abv.trim().length > 0 &&
+    parseExpectedAbv(item.values.abv) === null
   const fields: Array<{
     key: keyof ApplicationValues
     label: string
@@ -604,6 +612,12 @@ function ReviewItemCard({
           <span className="image-caption">
             Original image · stays in browser
           </span>
+          {item.checks && (
+            <ImageInspector
+              imageUrl={item.previewUrl}
+              fileName={item.file.name}
+            />
+          )}
         </div>
         <div className="fields-column">
           <div className="application-fields">
@@ -633,12 +647,23 @@ function ReviewItemCard({
                         onChange(item.id, field.key, event.target.value)
                       }
                       disabled={disabled}
+                      aria-invalid={field.key === 'abv' && abvIsInvalid}
+                      aria-describedby={
+                        field.key === 'abv' && abvIsInvalid
+                          ? `${inputId}-error`
+                          : undefined
+                      }
                       required
                     />
                     {field.suffix && (
                       <span aria-hidden="true">{field.suffix}</span>
                     )}
                   </div>
+                  {field.key === 'abv' && abvIsInvalid && (
+                    <span className="field-error" id={`${inputId}-error`}>
+                      Enter a complete number from 0 to 100.
+                    </span>
+                  )}
                 </div>
               )
             })}
@@ -666,7 +691,7 @@ function ReviewItemCard({
                 className="button button-secondary"
                 type="button"
                 onClick={() => onRetry(item.id)}
-                disabled={!valuesAreComplete(item.values)}
+                disabled={!valuesAreValid(item.values)}
               >
                 Try again
               </button>

@@ -11,7 +11,7 @@ Label Verifier is a local-first proof of concept that helps a compliance reviewe
 1. Open the [live prototype](https://dhruvj38.github.io/ttb-label-verifier/).
 2. Select **Try sample label**. The sample application values are filled in automatically.
 3. Select **Analyze label**.
-4. Review each Pass, Mismatch, or Needs review result and its evidence.
+4. Review each Pass, Mismatch, or Needs review result and its evidence. Use **Inspect warning formatting** to zoom and pan the original label for the manual typography check.
 
 For your own image, choose or drop a JPEG, PNG, or WebP label and enter:
 
@@ -65,12 +65,12 @@ Tesseract's worker, WebAssembly core, and English language data are bundled unde
 
 ### Matching policy
 
-- Brand and class/type comparisons normalize Unicode, apostrophe variants, case, and repeated whitespace. `STONE'S THROW` and `Stone's Throw` pass.
+- Brand and class/type comparisons normalize Unicode, apostrophe variants, case, and repeated whitespace. A pass requires one complete OCR line or adjacent line group to match the application value; a substring alone cannot pass. `STONE'S THROW` and `Stone's Throw` pass.
 - A close but non-equivalent identity match becomes **Needs review**, never an automatic pass.
 - ABV is compared as the numeric alcohol-by-volume percentage; proof alone is not treated as ABV.
 - Net contents are normalized to milliliters before comparison.
 - The warning can pass only when its complete § 16.21 text, punctuation, capitalization, and uppercase prefix appear after line-break whitespace normalization. Near OCR matches or low-confidence text require review.
-- Warning typography and physical presentation always require manual review. An unscaled photograph cannot prove bold weight, physical type size, separation, contrast, or ordinary-condition legibility.
+- Warning typography and physical presentation always require manual review. The interface provides a keyboard-accessible 100–300% zoom and pannable original image, but an unscaled photograph cannot prove bold weight, physical type size, separation, contrast, or ordinary-condition legibility.
 
 ## Tools
 

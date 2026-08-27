@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { App } from '../../src/app/App'
@@ -73,11 +73,72 @@ describe('App', () => {
     expect(screen.getByText('92% OCR confidence')).toBeInTheDocument()
 
     await user.click(
+      screen.getByRole('button', { name: 'Inspect warning formatting' }),
+    )
+    const dialog = screen.getByRole('dialog', {
+      name: 'Inspect government warning',
+    })
+    expect(within(dialog).getByLabelText('Zoom')).toHaveValue('150')
+    expect(
+      within(dialog).getByAltText('Zoomable label evidence for label.png'),
+    ).toBeInTheDocument()
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Close inspection' }),
+    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await user.click(
       screen.getByRole('button', { name: /View extracted label text/ }),
     )
     expect(
       screen.getByText(/OLD TOM DISTILLERY/, { selector: 'pre' }),
     ).toBeInTheDocument()
+  })
+
+  it('does not pass a brand that is only a substring of label evidence', async () => {
+    const user = userEvent.setup()
+    render(<App ocrEngine={mockEngine()} />)
+    await addValidFile(user)
+    await user.type(screen.getByLabelText('Brand name'), 'TOM')
+    await user.type(
+      screen.getByLabelText('Class / type'),
+      'Kentucky Straight Bourbon Whiskey',
+    )
+    await user.type(screen.getByLabelText('Alcohol by volume'), '45')
+    await user.type(screen.getByLabelText('Net contents'), '750 mL')
+    await user.click(screen.getByRole('button', { name: 'Analyze label' }))
+
+    const heading = await screen.findByRole('heading', { name: 'Brand name' })
+    const brandCheck = heading.closest('article')
+    expect(brandCheck).not.toBeNull()
+    expect(within(brandCheck!).getByText('Mismatch')).toBeInTheDocument()
+    expect(
+      within(brandCheck!).getByText('OLD TOM DISTILLERY'),
+    ).toBeInTheDocument()
+  })
+
+  it('blocks malformed or out-of-range ABV before analysis', async () => {
+    const user = userEvent.setup()
+    const engine = mockEngine()
+    render(<App ocrEngine={engine} />)
+    await addValidFile(user)
+    await user.type(screen.getByLabelText('Brand name'), 'OLD TOM DISTILLERY')
+    await user.type(
+      screen.getByLabelText('Class / type'),
+      'Kentucky Straight Bourbon Whiskey',
+    )
+    await user.type(screen.getByLabelText('Alcohol by volume'), '450')
+    await user.type(screen.getByLabelText('Net contents'), '750 mL')
+
+    expect(screen.getByLabelText('Alcohol by volume')).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    )
+    expect(
+      screen.getByText('Enter a complete number from 0 to 100.'),
+    ).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Analyze label' })).toBeDisabled()
+    expect(engine.recognize).not.toHaveBeenCalled()
   })
 
   it('isolates a failed item and lets the next queued item complete', async () => {

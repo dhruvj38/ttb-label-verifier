@@ -31,9 +31,11 @@ export function extractAbv(text: string): NumericEvidence[] {
 }
 
 export function parseExpectedAbv(value: string): number | null {
-  const match = value.match(/\d{1,2}(?:\.\d+)?/)
+  const match = value.match(
+    /^\s*([+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:e[+-]?\d+)?)\s*%?\s*$/i,
+  )
   if (!match) return null
-  const result = Number(match[0])
+  const result = Number(match[1])
   return Number.isFinite(result) && result >= 0 && result <= 100 ? result : null
 }
 

@@ -37,6 +37,52 @@ test('sample label runs through real same-origin OCR', async ({ page }) => {
     ' · ',
   )
   console.log(`REAL_OCR_METRICS: ${metrics}`)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  const completedDimensions = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }))
+  expect(completedDimensions.scrollWidth).toBeLessThanOrEqual(
+    completedDimensions.clientWidth,
+  )
+
+  await expect(
+    page
+      .locator('.check-result')
+      .filter({ hasText: 'Warning format' })
+      .getByText('Needs review'),
+  ).toBeVisible()
+
+  await page.getByRole('button', { name: 'Inspect warning formatting' }).click()
+  const inspection = page.getByRole('dialog', {
+    name: 'Inspect government warning',
+  })
+  await expect(inspection).toBeVisible()
+  const zoom = inspection.getByRole('slider', { name: 'Zoom', exact: true })
+  await expect(zoom).toHaveValue('150')
+  await zoom.fill('300')
+  await expect(inspection.getByText('300%')).toBeVisible()
+  const viewport = inspection.getByLabel(
+    'Zoomed label image. Use arrow keys or touch to pan.',
+  )
+  await expect(viewport).toBeVisible()
+  const zoomedImage = inspection.getByAltText(/Zoomable label evidence/)
+  const zoomDimensions = await zoomedImage.evaluate((image) => ({
+    imageHeight: image.clientHeight,
+    viewportHeight: image.parentElement?.clientHeight ?? 0,
+  }))
+  expect(zoomDimensions.imageHeight).toBeGreaterThan(
+    zoomDimensions.viewportHeight * 2,
+  )
+  const panned = await viewport.evaluate((element) => {
+    element.scrollTop = element.scrollHeight
+    return element.scrollTop
+  })
+  expect(panned).toBeGreaterThan(0)
+  await inspection.getByRole('button', { name: 'Close inspection' }).click()
+  await expect(inspection).not.toBeVisible()
+
   expect(externalRequests).toEqual([])
 })
 

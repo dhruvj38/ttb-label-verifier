@@ -38,42 +38,34 @@ export function levenshteinSimilarity(left: string, right: string): number {
   return 1 - previous[right.length]! / Math.max(left.length, right.length)
 }
 
-export interface ClosestLine {
+export interface IdentityEvidence {
   text: string
   similarity: number
 }
 
-export function findClosestLine(text: string, expected: string): ClosestLine {
+export function findIdentityEvidence(
+  text: string,
+  expected: string,
+): IdentityEvidence {
   const normalizedExpected = normalizeIdentity(expected)
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
 
-  let closest: ClosestLine = { text: 'Not found', similarity: 0 }
-  for (const line of lines) {
-    const normalizedLine = normalizeIdentity(line)
-    const candidates = [normalizedLine]
-    const words = normalizedLine.split(' ')
-    const expectedWords = normalizedExpected.split(' ').length
+  let closest: IdentityEvidence = { text: 'Not found', similarity: 0 }
+  const maximumLines = Math.min(4, lines.length)
 
-    for (
-      let width = Math.max(1, expectedWords - 1);
-      width <= Math.min(words.length, expectedWords + 1);
-      width += 1
-    ) {
-      for (let start = 0; start + width <= words.length; start += 1) {
-        candidates.push(words.slice(start, start + width).join(' '))
+  for (let lineCount = 1; lineCount <= maximumLines; lineCount += 1) {
+    for (let start = 0; start + lineCount <= lines.length; start += 1) {
+      const evidenceLines = lines.slice(start, start + lineCount)
+      const similarity = levenshteinSimilarity(
+        normalizeIdentity(evidenceLines.join(' ')),
+        normalizedExpected,
+      )
+      if (similarity > closest.similarity) {
+        closest = { text: evidenceLines.join('\n'), similarity }
       }
-    }
-
-    const similarity = Math.max(
-      ...candidates.map((candidate) =>
-        levenshteinSimilarity(candidate, normalizedExpected),
-      ),
-    )
-    if (similarity > closest.similarity) {
-      closest = { text: line, similarity }
     }
   }
   return closest
