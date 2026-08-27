@@ -5,6 +5,7 @@ export interface NumericEvidence {
 }
 
 const OCR_NUMBER = '([+-]?(?:\\d[\\d,.]*|\\.\\d+))'
+const OCR_NUMBER_BOUNDARY = '(?<![\\p{L}\\p{N}.,+\\-])'
 const NET_CONTENTS_NUMBER = '(\\d+(?:\\.\\d+)?)'
 const NET_CONTENTS_UNIT =
   '(m\\s*l|millilit(?:er|re)s?|l(?:iter|itre)?s?|fl\\.?\\s*oz\\.?)'
@@ -34,7 +35,7 @@ export function extractAbv(text: string): NumericEvidence[] {
   const results: NumericEvidence[] = []
   const patterns = [
     new RegExp(
-      `(?<![\\p{L}\\p{N}])${OCR_NUMBER}\\s*%\\s*(?:alc(?:ohol)?\\.?\\s*(?:\\/?\\s*(?:by\\s*)?vol(?:ume)?\\.?)?)`,
+      `${OCR_NUMBER_BOUNDARY}${OCR_NUMBER}\\s*%\\s*(?:alc(?:ohol)?\\.?\\s*(?:\\/?\\s*(?:by\\s*)?vol(?:ume)?\\.?)?)`,
       'giu',
     ),
     new RegExp(
@@ -77,7 +78,7 @@ export function parseExpectedAbv(value: string): number | null {
 export function extractNetContents(text: string): NumericEvidence[] {
   const results: NumericEvidence[] = []
   const pattern = new RegExp(
-    `(?<![\\p{L}\\p{N}])${OCR_NUMBER}\\s*${NET_CONTENTS_UNIT}\\b`,
+    `${OCR_NUMBER_BOUNDARY}${OCR_NUMBER}\\s*${NET_CONTENTS_UNIT}\\b`,
     'giu',
   )
 

@@ -37,6 +37,17 @@ describe('ABV extraction', () => {
   })
 
   it.each([
+    'batch-45% Alc./Vol.',
+    'batch.45% Alc./Vol.',
+    'batch1,45% Alc./Vol.',
+  ])(
+    'does not restart ABV extraction inside malformed token context %j',
+    (text) => {
+      expect(extractAbv(text).some((item) => item.value === 45)).toBe(false)
+    },
+  )
+
+  it.each([
     '450',
     '450%',
     '45abc',
@@ -93,6 +104,15 @@ describe('net contents extraction', () => {
     expect(evidence).toEqual([expect.objectContaining({ value: 750.5 })])
     expect(evidence[0]).not.toHaveProperty('malformed')
   })
+
+  it.each(['batch-750 mL', 'batch.750 mL', 'batch1,750 mL'])(
+    'does not restart volume extraction inside malformed token context %j',
+    (text) => {
+      expect(extractNetContents(text).some((item) => item.value === 750)).toBe(
+        false,
+      )
+    },
+  )
 
   it.each([
     'garbage 750 mL',
