@@ -225,6 +225,56 @@ describe('App', () => {
     ).toBeVisible()
   })
 
+  it('reviews multi-line suffix fragments before passing complete groups', async () => {
+    const user = userEvent.setup()
+    const engine = mockEngine({
+      recognize: vi.fn().mockResolvedValue({
+        text: deeplySplitIdentityText,
+        confidence: 92,
+        durationMs: 700,
+      }),
+    })
+    render(<App ocrEngine={engine} />)
+    await addValidFile(user)
+    await user.type(screen.getByLabelText('Brand name'), 'TOM DISTILLERY')
+    await user.type(
+      screen.getByLabelText('Class / type'),
+      'Straight Bourbon Whiskey',
+    )
+    await user.type(screen.getByLabelText('Alcohol by volume'), '45')
+    await user.type(screen.getByLabelText('Net contents'), '750 mL')
+    await user.click(screen.getByRole('button', { name: 'Analyze label' }))
+
+    const fragmentBrand = await screen.findByRole('heading', {
+      name: 'Brand name',
+    })
+    const fragmentClass = screen.getByRole('heading', { name: 'Class / type' })
+    expect(
+      within(fragmentBrand.closest('article')!).getByText('Needs review'),
+    ).toBeVisible()
+    expect(
+      within(fragmentClass.closest('article')!).getByText('Needs review'),
+    ).toBeVisible()
+
+    await user.clear(screen.getByLabelText('Brand name'))
+    await user.type(screen.getByLabelText('Brand name'), 'OLD TOM DISTILLERY')
+    await user.clear(screen.getByLabelText('Class / type'))
+    await user.type(
+      screen.getByLabelText('Class / type'),
+      'Kentucky Straight Bourbon Whiskey',
+    )
+    await user.click(screen.getByRole('button', { name: 'Analyze label' }))
+
+    const fullBrand = await screen.findByRole('heading', { name: 'Brand name' })
+    const fullClass = screen.getByRole('heading', { name: 'Class / type' })
+    expect(
+      within(fullBrand.closest('article')!).getByText('Pass'),
+    ).toBeVisible()
+    expect(
+      within(fullClass.closest('article')!).getByText('Pass'),
+    ).toBeVisible()
+  })
+
   it('blocks malformed or out-of-range ABV before analysis', async () => {
     const user = userEvent.setup()
     const engine = mockEngine()

@@ -162,6 +162,58 @@ describe('label rules', () => {
     expect(full?.observed).toBe(lines.join('\n'))
   })
 
+  it('reviews multi-line suffix fragments and passes complete identities', () => {
+    const text = validText
+      .replace("STONE'S THROW", 'OLD\nTOM\nDISTILLERY')
+      .replace(
+        'Kentucky Straight Bourbon Whiskey',
+        'KENTUCKY\nSTRAIGHT\nBOURBON WHISKEY',
+      )
+    const fragments = evaluateLabel(
+      {
+        ...expected,
+        brand: 'TOM DISTILLERY',
+        classType: 'STRAIGHT BOURBON WHISKEY',
+      },
+      text,
+      94,
+    )
+    expect(fragments.find((item) => item.key === 'brand')?.status).toBe(
+      'review',
+    )
+    expect(fragments.find((item) => item.key === 'classType')?.status).toBe(
+      'review',
+    )
+
+    const full = evaluateLabel(
+      {
+        ...expected,
+        brand: 'OLD TOM DISTILLERY',
+        classType: 'KENTUCKY STRAIGHT BOURBON WHISKEY',
+      },
+      text,
+      94,
+    )
+    expect(full.find((item) => item.key === 'brand')?.status).toBe('pass')
+    expect(full.find((item) => item.key === 'classType')?.status).toBe('pass')
+  })
+
+  it('does not join candidate text across the separately submitted identity', () => {
+    const text = validText.replace(
+      "STONE'S THROW\nKentucky Straight Bourbon Whiskey",
+      'OLD TOM\nKentucky Straight Bourbon Whiskey\nDISTILLERY',
+    )
+    const brand = evaluateLabel(
+      {
+        ...expected,
+        brand: 'OLD TOM Kentucky Straight Bourbon Whiskey DISTILLERY',
+      },
+      text,
+      94,
+    ).find((item) => item.key === 'brand')
+    expect(brand?.status).not.toBe('pass')
+  })
+
   it('does not pass an exact class line when adjacent text plausibly continues it', () => {
     const splitText = validText.replace(
       'Kentucky Straight Bourbon Whiskey',

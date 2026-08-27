@@ -44,7 +44,13 @@ test('sample label runs through real same-origin OCR', async ({ page }) => {
     page
       .locator('.check-result')
       .filter({ hasText: 'Brand name' })
-      .getByText('Pass'),
+      .getByText('Needs review'),
+  ).toBeVisible()
+  await expect(
+    page
+      .locator('.check-result')
+      .filter({ hasText: 'Class / type' })
+      .getByText('Needs review'),
   ).toBeVisible()
   const metrics = (await page.locator('.ocr-metrics').innerText()).replace(
     /\n/g,

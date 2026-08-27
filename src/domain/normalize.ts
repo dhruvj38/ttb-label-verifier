@@ -72,7 +72,9 @@ function plausiblyContinues(value: string, isKnownSeparateLine: boolean) {
   if (/%/.test(value) || /^\s*government\s+warning\s*:/i.test(value)) {
     return false
   }
-  return !/^\s*\d+(?:\.\d+)?\s*(?:m\s*l|l|fl\.?\s*oz\.?)\s*$/i.test(value)
+  return !/^\s*\d+(?:\.\d+)?\s*(?:m\s*l|millilit(?:er|re)s?|l(?:iter|itre)?s?|fl\.?\s*oz\.?)\s*$/i.test(
+    value,
+  )
 }
 
 export function findIdentityEvidence(
@@ -96,6 +98,13 @@ export function findIdentityEvidence(
 
   for (let lineCount = 1; lineCount <= maximumLines; lineCount += 1) {
     for (let start = 0; start + lineCount <= lines.length; start += 1) {
+      if (
+        lines
+          .slice(start, start + lineCount)
+          .some((_, offset) => knownSeparateLines.has(start + offset))
+      ) {
+        continue
+      }
       const evidenceLines = lines.slice(start, start + lineCount)
       const similarity = levenshteinSimilarity(
         normalizeIdentity(evidenceLines.join(' ')),
@@ -108,12 +117,18 @@ export function findIdentityEvidence(
           lines[start + lineCount]!,
           knownSeparateLines.has(start + lineCount),
         )
-      const ambiguousContinuation = similarity === 1 && nextContinues
+      const previousContinues =
+        similarity === 1 &&
+        start > 0 &&
+        plausiblyContinues(lines[start - 1]!, knownSeparateLines.has(start - 1))
+      const ambiguousContinuation =
+        similarity === 1 && (previousContinues || nextContinues)
+      const contextStart = previousContinues ? start - 1 : start
       const contextEnd = nextContinues
         ? start + lineCount + 1
         : start + lineCount
       const candidate: IdentityEvidence = {
-        text: lines.slice(start, contextEnd).join('\n'),
+        text: lines.slice(contextStart, contextEnd).join('\n'),
         similarity,
         ambiguousContinuation,
       }

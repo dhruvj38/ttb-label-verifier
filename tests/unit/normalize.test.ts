@@ -58,6 +58,28 @@ describe('similarity helpers', () => {
   )
 
   it.each([
+    [['OLD', 'TOM', 'DISTILLERY'], 'TOM DISTILLERY'],
+    [['KENTUCKY', 'STRAIGHT', 'BOURBON WHISKEY'], 'STRAIGHT BOURBON WHISKEY'],
+    [['1792 DISTILLERY', 'Old', 'Tom'], 'Old Tom'],
+    [['THE OLD DISTILLERY COMPANY', 'OLD', 'TOM'], 'OLD TOM'],
+  ])('marks exact suffix span %j as ambiguous for %j', (lines, expected) => {
+    const evidence = findIdentityEvidence(lines.join('\n'), expected)
+    expect(evidence.similarity).toBe(1)
+    expect(evidence.text).toBe(lines.join('\n'))
+    expect(evidence.ambiguousContinuation).toBe(true)
+  })
+
+  it('marks a middle exact span ambiguous on both boundaries', () => {
+    const evidence = findIdentityEvidence(
+      'THE OLD\nTOM\nDISTILLERY COMPANY',
+      'TOM',
+    )
+    expect(evidence.similarity).toBe(1)
+    expect(evidence.text).toBe('THE OLD\nTOM\nDISTILLERY COMPANY')
+    expect(evidence.ambiguousContinuation).toBe(true)
+  })
+
+  it.each([
     [['OLD', 'TOM', 'DISTILLERY'], 'OLD TOM'],
     [['Kentucky', 'Straight', 'Bourbon Whiskey'], 'Kentucky Straight'],
     [['Old', 'Tom', '1792 DISTILLERY'], 'Old Tom'],
@@ -71,6 +93,39 @@ describe('similarity helpers', () => {
       expect(evidence.ambiguousContinuation).toBe(true)
     },
   )
+
+  it('does not manufacture an exact span across a known separate identity', () => {
+    const evidence = findIdentityEvidence(
+      'OLD TOM\nKentucky Straight Bourbon Whiskey\nDISTILLERY',
+      'OLD TOM Kentucky Straight Bourbon Whiskey DISTILLERY',
+      ['Kentucky Straight Bourbon Whiskey'],
+    )
+    expect(evidence.similarity).toBeLessThan(1)
+  })
+
+  it('passes complete multi-line identities between hard boundaries', () => {
+    const brand = findIdentityEvidence(
+      '750 mL\nOLD\nTOM\nKentucky\nStraight Bourbon Whiskey\n45% Alc./Vol.',
+      'OLD TOM',
+      ['Kentucky Straight Bourbon Whiskey'],
+    )
+    expect(brand).toEqual({
+      text: 'OLD\nTOM',
+      similarity: 1,
+      ambiguousContinuation: false,
+    })
+
+    const classType = findIdentityEvidence(
+      'GOVERNMENT WARNING: required statement\nOLD TOM\nKentucky\nStraight Bourbon Whiskey\n750 millilitres',
+      'Kentucky Straight Bourbon Whiskey',
+      ['OLD TOM'],
+    )
+    expect(classType).toEqual({
+      text: 'Kentucky\nStraight Bourbon Whiskey',
+      similarity: 1,
+      ambiguousContinuation: false,
+    })
+  })
 
   it('does not treat a separately supplied identity as a continuation', () => {
     const evidence = findIdentityEvidence(
