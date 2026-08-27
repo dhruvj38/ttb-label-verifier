@@ -276,6 +276,81 @@ ${GOVERNMENT_WARNING}
     )
   })
 
+  it('reviews matching declarations alongside contradictory values', () => {
+    const checks = evaluateLabel(
+      expected,
+      validText
+        .replace('45% Alc./Vol. (90 Proof)', '45% Alc./Vol.\n40% Alc./Vol.')
+        .replace('750 mL', '750 mL\n1 L'),
+      94,
+    )
+    const abv = checks.find((check) => check.key === 'abv')
+    const volume = checks.find((check) => check.key === 'netContents')
+    expect(abv).toMatchObject({ status: 'review' })
+    expect(abv?.observed).toContain('45% Alc./Vol.')
+    expect(abv?.observed).toContain('40% Alc./Vol.')
+    expect(volume).toMatchObject({ status: 'review' })
+    expect(volume?.observed).toContain('750 mL')
+    expect(volume?.observed).toContain('1 L')
+  })
+
+  it('reviews multiple contradictory nonmatching declarations', () => {
+    const checks = evaluateLabel(
+      expected,
+      validText
+        .replace('45% Alc./Vol. (90 Proof)', '40% Alc./Vol.\n42% Alc./Vol.')
+        .replace('750 mL', '700 mL\n1 L'),
+      94,
+    )
+    expect(checks.find((check) => check.key === 'abv')?.status).toBe('review')
+    expect(checks.find((check) => check.key === 'netContents')?.status).toBe(
+      'review',
+    )
+  })
+
+  it('collapses duplicate and canonically equivalent declarations', () => {
+    const checks = evaluateLabel(
+      expected,
+      validText
+        .replace('45% Alc./Vol. (90 Proof)', '45% Alc./Vol.\n45% Alc./Vol.')
+        .replace('750 mL', '750 mL\n0.75 L'),
+      94,
+    )
+    expect(checks.find((check) => check.key === 'abv')?.status).toBe('pass')
+    const volume = checks.find((check) => check.key === 'netContents')
+    expect(volume?.status).toBe('pass')
+    expect(volume?.observed).toContain('750 mL')
+    expect(volume?.observed).toContain('0.75 L')
+  })
+
+  it('does not pass near-but-different declarations outside floating-point epsilon', () => {
+    const checks = evaluateLabel(
+      expected,
+      validText
+        .replace('45% Alc./Vol. (90 Proof)', '45.0001% Alc./Vol.')
+        .replace('750 mL', '750.0001 mL'),
+      94,
+    )
+    expect(checks.find((check) => check.key === 'abv')?.status).toBe('mismatch')
+    expect(checks.find((check) => check.key === 'netContents')?.status).toBe(
+      'mismatch',
+    )
+  })
+
+  it('passes exact decimal declarations', () => {
+    const checks = evaluateLabel(
+      { ...expected, abv: '45.5', netContents: '750.5 mL' },
+      validText
+        .replace('45% Alc./Vol. (90 Proof)', '45.5% Alc./Vol.')
+        .replace('750 mL', '750.5 mL'),
+      94,
+    )
+    expect(checks.find((check) => check.key === 'abv')?.status).toBe('pass')
+    expect(checks.find((check) => check.key === 'netContents')?.status).toBe(
+      'pass',
+    )
+  })
+
   it.each([
     ['1,45% Alc./Vol.', '1,750 mL'],
     ['.45% Alc./Vol.', '.750 mL'],

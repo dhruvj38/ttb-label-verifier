@@ -331,6 +331,36 @@ describe('App', () => {
     ).toBeVisible()
   })
 
+  it('shows every conflicting numeric declaration in review evidence', async () => {
+    const user = userEvent.setup()
+    const engine = mockEngine({
+      recognize: vi.fn().mockResolvedValue({
+        text: extractedText
+          .replace('45% Alc./Vol. (90 Proof)', '45% Alc./Vol.\n40% Alc./Vol.')
+          .replace('750 mL', '750 mL\n1 L'),
+        confidence: 92,
+        durationMs: 700,
+      }),
+    })
+    render(<App ocrEngine={engine} />)
+    await addValidFile(user)
+    await completeFields(user)
+    await user.click(screen.getByRole('button', { name: 'Analyze label' }))
+
+    const abv = (
+      await screen.findByRole('heading', {
+        name: 'Alcohol by volume',
+      })
+    ).closest('article')!
+    const volume = screen
+      .getByRole('heading', { name: 'Net contents' })
+      .closest('article')!
+    expect(within(abv).getByText('Needs review')).toBeVisible()
+    expect(abv).toHaveTextContent('45% Alc./Vol., 40% Alc./Vol.')
+    expect(within(volume).getByText('Needs review')).toBeVisible()
+    expect(volume).toHaveTextContent('750 mL, 1 L')
+  })
+
   it('blocks malformed or out-of-range ABV before analysis', async () => {
     const user = userEvent.setup()
     const engine = mockEngine()

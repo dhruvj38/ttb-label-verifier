@@ -74,7 +74,6 @@ function numericCheck(
   expectedDisplay: string,
   expected: number | null,
   evidence: ReturnType<typeof extractAbv>,
-  tolerance: number,
 ): CheckResult {
   if (expected === null) {
     return {
@@ -103,21 +102,40 @@ function numericCheck(
       label,
       status: 'review',
       expected: expectedDisplay,
-      observed: malformed.map((item) => item.raw).join(', '),
+      observed: evidence.map((item) => item.raw).join(', '),
       reason:
         'OCR found a numeric-looking value with unsupported punctuation or sign. Review the label value manually.',
     }
   }
-  const match = evidence.find(
-    (candidate) => Math.abs(candidate.value - expected) <= tolerance,
+  const declarations = evidence.reduce<Array<(typeof evidence)[number][]>>(
+    (groups, candidate) => {
+      const equivalent = groups.find((group) =>
+        numericallyEqual(group[0]!.value, candidate.value),
+      )
+      if (equivalent) equivalent.push(candidate)
+      else groups.push([candidate])
+      return groups
+    },
+    [],
   )
-  if (match) {
+  if (declarations.length > 1) {
+    return {
+      key,
+      label,
+      status: 'review',
+      expected: expectedDisplay,
+      observed: evidence.map((item) => item.raw).join(', '),
+      reason:
+        'The label contains conflicting declarations for this value. Review every declaration manually.',
+    }
+  }
+  if (numericallyEqual(declarations[0]![0]!.value, expected)) {
     return {
       key,
       label,
       status: 'pass',
       expected: expectedDisplay,
-      observed: match.raw,
+      observed: declarations[0]!.map((item) => item.raw).join(', '),
       reason: 'The extracted value matches the application value.',
     }
   }
@@ -129,6 +147,11 @@ function numericCheck(
     observed: evidence.map((item) => item.raw).join(', '),
     reason: 'The extracted value differs from the application value.',
   }
+}
+
+function numericallyEqual(left: number, right: number): boolean {
+  const scale = Math.max(1, Math.abs(left), Math.abs(right))
+  return Math.abs(left - right) <= Number.EPSILON * scale
 }
 
 function warningTextCheck(text: string, confidence: number): CheckResult {
@@ -191,7 +214,6 @@ export function evaluateLabel(
       `${values.abv.replace(/\s*%$/, '')}%`,
       parseExpectedAbv(values.abv),
       extractAbv(text),
-      0.05,
     ),
     numericCheck(
       'netContents',
@@ -199,7 +221,6 @@ export function evaluateLabel(
       values.netContents,
       parseExpectedNetContents(values.netContents),
       extractNetContents(text),
-      0.6,
     ),
     warningTextCheck(text, confidence),
     {
