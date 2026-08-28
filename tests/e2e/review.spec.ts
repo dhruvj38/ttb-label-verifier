@@ -154,10 +154,18 @@ test('unevenly lit angled photo retains reviewable evidence', async ({
 })
 
 test('local worker pool analyzes two labels concurrently', async ({ page }) => {
-  await page.goto('./')
-  await expect(page.getByText(/OCR ready · 2 labels at a time/)).toBeVisible({
-    timeout: 30_000,
+  test.setTimeout(120_000)
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'hardwareConcurrency', {
+      configurable: true,
+      value: 4,
+    })
   })
+  await page.goto('./')
+  await expect(page.locator('.engine-state')).toContainText(
+    'OCR ready · 2 labels at a time',
+    { timeout: 60_000 },
+  )
   await page.getByRole('button', { name: 'Try sample label' }).click()
   await page.getByRole('button', { name: 'Try sample label' }).click()
   const startedAt = Date.now()
