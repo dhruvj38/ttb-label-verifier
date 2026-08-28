@@ -379,28 +379,32 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
           aria-label="Label Verifier home"
         >
           <span className="wordmark-mark" aria-hidden="true">
-            LV
+            <svg
+              width="26"
+              height="26"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M10 2.5h4" />
+              <path d="M10.5 2.5v3.4c0 1.1-2.7 2.1-2.7 4.5V19a2 2 0 0 0 2 2h4.4a2 2 0 0 0 2-2v-8.6c0-2.4-2.7-3.4-2.7-4.5V2.5" />
+              <path d="M9.4 13.6l2 2 3.4-3.8" />
+            </svg>
           </span>
           <span>
             <strong>Label Verifier</strong>
-            <small>Distilled spirits review aid</small>
           </span>
         </a>
-        <div className="prototype-tag">
-          Prototype · Not official TTB approval
-        </div>
       </header>
       <main id="workspace">
         <section className="hero" aria-labelledby="page-title">
           <div className="hero-copy">
-            <p className="eyebrow">Artwork-to-application review</p>
             <h1 id="page-title">
               Make the label say what the application says.
             </h1>
-            <p className="hero-intro">
-              Add distilled-spirits labels, enter the submitted values, and get
-              an evidence-linked first pass in your browser.
-            </p>
           </div>
           <aside className="privacy-note">
             <LockIcon />
@@ -448,10 +452,7 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
             <div>
               <p className="section-kicker">Step 1</p>
               <h2 id="upload-heading">Add label artwork</h2>
-              <p>
-                Select one label or a batch. Each image gets its own application
-                record.
-              </p>
+              <p>Select one label or a batch.</p>
             </div>
             <div className={`engine-state engine-${warmState}`} role="status">
               <span aria-hidden="true" />
@@ -617,22 +618,9 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
             </div>
           </section>
         )}
-        <section className="scope-note" aria-labelledby="scope-heading">
-          <div className="scope-rule" aria-hidden="true">
-            Decision aid
-          </div>
-          <div>
-            <h2 id="scope-heading">The final call stays with the reviewer.</h2>
-            <p>
-              OCR can compare text and values. It cannot confirm physical type
-              size, bold weight, separation, or real-world legibility from a
-              photograph. Those checks always remain manual in this prototype.
-            </p>
-          </div>
-        </section>
       </main>
       <footer>
-        <span>Label Verifier · Local-first proof of concept</span>
+        <span>Label Verifier</span>
         <a
           href="https://www.ecfr.gov/current/title-27/chapter-I/subchapter-A/part-16/subpart-C/section-16.21"
           target="_blank"

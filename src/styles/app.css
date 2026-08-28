@@ -118,12 +118,9 @@ a {
   width: 42px;
   height: 42px;
   place-items: center;
-  border: 2px solid var(--navy);
-  font-family: 'Cascadia Mono', Consolas, monospace;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  transform: rotate(-2deg);
+  color: #fff;
+  background: var(--navy);
+  border-radius: 12px 12px 12px 4px;
 }
 
 .wordmark > span:last-child {
@@ -135,25 +132,6 @@ a {
   font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
   font-size: 19px;
   line-height: 1.1;
-}
-
-.wordmark small {
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.prototype-tag {
-  padding: 7px 11px;
-  border: 1px solid #b5c3cb;
-  border-radius: 999px;
-  color: #49606d;
-  background: rgba(255, 255, 255, 0.6);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
 }
 
 main,
@@ -171,7 +149,6 @@ footer {
   border-top: 1px solid #c2cdd3;
 }
 
-.eyebrow,
 .section-kicker {
   margin: 0 0 10px;
   color: var(--blue);
@@ -191,14 +168,6 @@ footer {
   font-weight: 600;
   letter-spacing: -0.045em;
   line-height: 0.98;
-}
-
-.hero-intro {
-  max-width: 690px;
-  margin: 26px 0 0;
-  color: #485d69;
-  font-size: 18px;
-  line-height: 1.6;
 }
 
 .privacy-note {
@@ -334,8 +303,7 @@ footer {
 
 .section-heading h2,
 .workspace-header h2,
-.batch-summary h2,
-.scope-note h2 {
+.batch-summary h2 {
   margin: 0;
   color: var(--navy-deep);
   font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
@@ -1209,38 +1177,9 @@ footer {
   background: var(--red-soft);
 }
 
-.scope-note {
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: 38px;
-  margin: 72px 0 62px;
-  padding-top: 28px;
-  border-top: 1px solid #aebcc4;
-}
-
-.scope-rule {
-  color: var(--blue);
-  font-family: 'Cascadia Mono', Consolas, monospace;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.scope-note h2 {
-  font-size: 32px;
-}
-
-.scope-note p {
-  max-width: 760px;
-  margin: 12px 0 0;
-  color: #50636e;
-  font-size: 15px;
-  line-height: 1.65;
-}
-
 footer {
   display: flex;
+  margin-top: 64px;
   justify-content: space-between;
   gap: 24px;
   padding: 24px 0 38px;
@@ -1297,27 +1236,12 @@ footer a {
     padding: 17px 14px;
   }
 
-  .prototype-tag {
-    max-width: 145px;
-    border-radius: 3px;
-    line-height: 1.35;
-    text-align: center;
-  }
-
-  .wordmark small {
-    display: none;
-  }
-
   .hero {
     padding: 38px 0;
   }
 
   .hero h1 {
     font-size: clamp(40px, 12vw, 58px);
-  }
-
-  .hero-intro {
-    font-size: 16px;
   }
 
   .step-rail {
@@ -1467,12 +1391,6 @@ footer a {
   .inspection-controls {
     grid-template-columns: auto minmax(80px, 1fr) 45px;
     padding: 12px 18px;
-  }
-
-  .scope-note {
-    grid-template-columns: 1fr;
-    gap: 12px;
-    margin-top: 52px;
   }
 
   footer {
