@@ -56,6 +56,7 @@ export interface ReviewItem {
 export type WarningFormatDecision = 'pass' | 'mismatch'
 
 export interface OcrEngine {
+  readonly maxConcurrency?: number
   warm(): Promise<number>
   recognize(
     file: File,

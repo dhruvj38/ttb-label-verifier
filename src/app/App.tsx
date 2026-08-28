@@ -73,6 +73,22 @@ function formatDuration(durationMs: number): string {
     : `${(durationMs / 1000).toFixed(1)} s`
 }
 
+async function runBounded(
+  ids: string[],
+  concurrency: number,
+  task: (id: string) => Promise<void>,
+): Promise<void> {
+  let nextIndex = 0
+  const workerCount = Math.max(1, Math.min(Math.floor(concurrency), ids.length))
+  async function runNext(): Promise<void> {
+    while (nextIndex < ids.length) {
+      const id = ids[nextIndex++]!
+      await task(id)
+    }
+  }
+  await Promise.all(Array.from({ length: workerCount }, () => runNext()))
+}
+
 interface AppProps {
   ocrEngine?: OcrEngine
 }
@@ -130,8 +146,13 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
   const activeStep = items.length === 0 ? 1 : completedItems.length > 0 ? 3 : 2
   const canAnalyze = !isBusy && queuedItems.length > 0
   const batchStatus = useMemo(() => {
-    if (isBusy)
-      return `Analyzing ${items.filter((item) => item.state === 'complete').length + 1} of ${items.length}`
+    if (isBusy) {
+      const processing = items.filter(
+        (item) => item.state === 'processing',
+      ).length
+      const waiting = items.filter((item) => item.state === 'queued').length
+      return `${completedItems.length} complete · ${processing} analyzing · ${waiting} queued`
+    }
     if (completedItems.length > 0)
       return `${completedItems.length} label${completedItems.length === 1 ? '' : 's'} reviewed${queuedItems.length ? ` · ${queuedItems.length} ready to analyze` : ''}`
     return `${items.length} label${items.length === 1 ? '' : 's'} ready`
@@ -163,13 +184,14 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
       })),
     ])
   }
-  async function addSample() {
+  async function addSample(
+    path = 'samples/valid-bourbon.png',
+    filename = 'old-tom-bourbon.png',
+  ) {
     try {
-      const response = await fetch(
-        `${import.meta.env.BASE_URL}samples/valid-bourbon.png`,
-      )
+      const response = await fetch(`${import.meta.env.BASE_URL}${path}`)
       if (!response.ok) throw new Error('Sample unavailable')
-      const file = new File([await response.blob()], 'old-tom-bourbon.png', {
+      const file = new File([await response.blob()], filename, {
         type: 'image/png',
       })
       setItems((current) => [
@@ -342,7 +364,7 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
           : item,
       ),
     )
-    for (const id of ids) await processItem(id)
+    await runBounded(ids, ocrEngine.maxConcurrency ?? 1, processItem)
   }
 
   return (
@@ -434,7 +456,7 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
             <div className={`engine-state engine-${warmState}`} role="status">
               <span aria-hidden="true" />
               {warmState === 'ready'
-                ? `OCR ready${warmDuration !== undefined ? ` · ${formatDuration(warmDuration)}` : ''}`
+                ? `OCR ready · ${ocrEngine.maxConcurrency ?? 1} ${(ocrEngine.maxConcurrency ?? 1) === 1 ? 'label' : 'labels'} at a time${warmDuration !== undefined ? ` · ${formatDuration(warmDuration)}` : ''}`
                 : warmState === 'error'
                   ? 'OCR will retry on analysis'
                   : 'Warming OCR'}
@@ -477,6 +499,18 @@ export function App({ ocrEngine = sharedOcrService }: AppProps) {
                 onClick={() => void addSample()}
               >
                 <SparkIcon /> Try sample label
+              </button>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() =>
+                  void addSample(
+                    'samples/challenging-photo.png',
+                    'old-tom-photo-challenge.png',
+                  )
+                }
+              >
+                <SparkIcon /> Try photo challenge
               </button>
             </div>
             <input

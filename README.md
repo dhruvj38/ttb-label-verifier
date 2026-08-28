@@ -9,7 +9,7 @@ Label Verifier is a local-first proof of concept that helps a compliance reviewe
 ## Try the demo
 
 1. Open the [live prototype](https://dhruvj38.github.io/ttb-label-verifier/).
-2. Select **Try sample label**. The sample application values are filled in automatically.
+2. Select **Try sample label** for pristine artwork, or **Try photo challenge** for an angled image with uneven lighting, shadow, and glare. The sample application values are filled in automatically.
 3. Select **Analyze label**.
 4. Review each Pass, Mismatch, or Needs review result and its evidence. Use **Inspect warning formatting** to zoom and pan the original label for the manual typography check.
 5. After that inspection, select **Confirm compliant** to record a human warning-format decision. The sample then reaches eight passes; select **Clear manual decision** to return that check to Needs review.
@@ -23,7 +23,7 @@ For your own image, choose or drop a JPEG, PNG, or WebP label and enter:
 - the complete bottler, producer, or importer name-and-address statement; and
 - whether the product is domestic or imported, plus country of origin for an import.
 
-Multiple images can be added together. The browser processes them sequentially with one reused OCR worker so a large selection does not decode every full-resolution image at once.
+Multiple images can be added together. On devices with at least four logical processors, the browser uses a bounded pool of two warmed OCR workers; constrained devices use one. This nearly halves large-batch time without decoding every full-resolution image or creating hundreds of workers at once. Live queue text reports how many labels are complete, processing, and waiting.
 
 ### CSV manifests for large batches
 
@@ -70,7 +70,7 @@ Then open `http://127.0.0.1:4173/ttb-label-verifier/`.
 
 The prototype is a static React/TypeScript application. It has three boundaries:
 
-1. **Image preparation and OCR.** Oversized artwork is downscaled to a maximum dimension of 2,200 pixels and converted to a high-contrast grayscale image. A single warmed Tesseract LSTM worker extracts text.
+1. **Image preparation and OCR.** Oversized artwork is downscaled to a maximum dimension of 2,200 pixels. Percentile normalization and contrast-limited adaptive histogram equalization (CLAHE) recover text across shadows and uneven illumination before a bounded pool of one or two warmed Tesseract LSTM workers extracts text.
 2. **Pure comparison rules.** Small functions normalize identity text, extract ABV and volume values, compare the mandatory warning, and return typed tri-state results.
 3. **Review interface.** React owns the batch queue and preserves each item's application data, progress, errors, OCR timing, extracted text, and evidence-linked checks.
 
@@ -103,20 +103,22 @@ The end-to-end OCR test records every browser request during analysis and fails 
 
 ## Performance
 
-The OCR worker begins warming after the initial render and is reused across the batch. Images larger than 2,200 pixels on either axis are downscaled before recognition. The UI reports both worker-ready and per-image recognition time rather than claiming a fixed service level.
+The OCR worker pool begins warming after the initial render and is reused across the batch. Images larger than 2,200 pixels on either axis are downscaled before recognition. The UI reports worker count, worker-ready time, live queue state, and per-image recognition time rather than claiming a fixed service level.
 
-On the included 1,400 × 1,800 high-contrast sample, the production Chromium smoke test completed OCR in **2.2 seconds** after an approximately **0.3 second** worker warm-up on the development machine. Hardware, browser cache, image size, glare, curvature, and text density materially affect timing; the stakeholder's roughly five-second goal is a target, not a guarantee.
+On the included 1,400 × 1,800 high-contrast sample, repeated production Chromium smoke tests completed OCR in **2.3–2.4 seconds at 95% confidence** after an approximately **0.3 second** two-worker warm-up on the development machine. The included 1,600 × 1,900 angled, shadowed, and glare-overlaid challenge completed in **2.6–2.7 seconds at 92% confidence**: all six application-value checks passed, while one warning OCR artifact correctly stayed in Needs review instead of auto-passing. Two pristine labels processed concurrently in approximately **3.0 seconds total**.
+
+At the observed 2.3 seconds per image, a continuously fed two-worker pool has an ideal OCR time of roughly **4 minutes for 200 labels** or **6 minutes for 300**, before browser and file-handling overhead. A constrained one-worker device would take roughly twice as long. Hardware, browser cache, image size, glare, curvature, and text density materially affect timing; the stakeholder's roughly five-second per-label goal is a target, not a guarantee.
 
 ### Where a local vision model could help
 
-The current prototype intentionally pairs local OCR with deterministic, auditable rules. A production discovery phase should benchmark a small quantized vision model running locally through WebGPU as a second tier for perspective correction, decorative lettering, glare/curvature detection, and field-region proposals. It should never silently replace the rules: the model would return candidate regions and quality signals, OCR would produce reviewable text, and the same comparison layer would decide Pass, Mismatch, or Needs review. A confidence-gated fallback preserves the no-outbound-traffic constraint while keeping model uncertainty visible to agents. Adoption would depend on measured accuracy, memory use, cold-start time, browser support, and accessibility—not an “AI” label alone.
+The current prototype uses a local neural OCR model plus deterministic, auditable comparison rules. Its classical local-vision preprocessing addresses lighting variation without adding model download size or network dependence. A production discovery phase should benchmark a small quantized vision model running locally through WebGPU as a second tier for perspective correction, decorative lettering, glare/curvature detection, and field-region proposals. It should never silently replace the rules: the model would return candidate regions and quality signals, OCR would produce reviewable text, and the same comparison layer would decide Pass, Mismatch, or Needs review. A confidence-gated fallback preserves the no-outbound-traffic constraint while keeping model uncertainty visible to agents. Adoption would depend on measured accuracy, memory use, cold-start time, browser support, and accessibility—not an “AI” label alone.
 
 ## Assumptions and scope
 
 - The automated rules are scoped to the assignment's distilled-spirits example. Beer and wine have different requirements and are not represented as supported.
 - Application data is entered manually because this standalone prototype does not integrate with COLA.
 - JPEG, PNG, and WebP images up to 12 MB are supported. PDF, HEIC, camera capture, perspective correction, and COLA/API integration are out of scope.
-- “Batch” means multi-file selection or drop, optional atomic local CSV value import, one application record per image, a bounded sequential queue, per-item progress, retry/removal, and a result summary. Completed unchanged records are not sent through OCR again when new ready records are analyzed.
+- “Batch” means multi-file selection or drop, optional atomic local CSV value import, one application record per image, a bounded one- or two-worker queue, per-item progress, retry/removal, and a result summary. Completed unchanged records are not sent through OCR again when new ready records are analyzed.
 - OCR is assistive. Poor photography, decorative lettering, bottle curvature, glare, and unusual layouts can reduce extraction quality. Ambiguous evidence is intentionally routed to a person.
 - A manual reviewer must still evaluate requirements outside the eight checks shown here, including conditional disclosures, same-field-of-vision placement, physical type sizes, and warning presentation.
 
@@ -133,7 +135,7 @@ tests/
   unit/         Deterministic domain-rule coverage
   component/    Upload, result, queue, and failure isolation
   e2e/          Production preview, responsive UI, and real OCR
-public/         Deterministic sample artwork
+public/         Deterministic pristine and photo-challenge sample artwork
 ```
 
 ## Official sources

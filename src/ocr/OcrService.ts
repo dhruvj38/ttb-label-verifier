@@ -4,6 +4,18 @@ import { preprocessImage } from './preprocess'
 
 type ProgressListener = (progress: number, label: string) => void
 
+interface WorkerSlot {
+  workerPromise?: Promise<Worker>
+  listener?: ProgressListener
+  busy: boolean
+}
+
+function recommendedWorkerCount(): number {
+  // Two workers nearly halve large-batch time without the memory spike caused
+  // by creating one worker per image. Keep constrained devices on one worker.
+  return (navigator.hardwareConcurrency || 4) >= 4 ? 2 : 1
+}
+
 function warningRegionConfidence(
   blocks: Awaited<ReturnType<Worker['recognize']>>['data']['blocks'],
 ): number | undefined {
@@ -50,12 +62,20 @@ function readableStatus(status: string): string {
 }
 
 export class BrowserOcrService implements OcrEngine {
-  private workerPromise?: Promise<Worker>
-  private listener?: ProgressListener
+  readonly maxConcurrency: number
+  private readonly slots: WorkerSlot[]
+  private readonly waiters: Array<(slot: WorkerSlot) => void> = []
+
+  constructor(workerCount = recommendedWorkerCount()) {
+    this.maxConcurrency = Math.max(1, Math.min(2, Math.floor(workerCount)))
+    this.slots = Array.from({ length: this.maxConcurrency }, () => ({
+      busy: false,
+    }))
+  }
 
   async warm(): Promise<number> {
     const startedAt = performance.now()
-    await this.getWorker()
+    await Promise.all(this.slots.map((slot) => this.getWorker(slot)))
     return performance.now() - startedAt
   }
 
@@ -64,13 +84,14 @@ export class BrowserOcrService implements OcrEngine {
     onProgress?: ProgressListener,
   ): Promise<OcrResult> {
     const startedAt = performance.now()
-    this.listener = onProgress
     onProgress?.(0.06, 'Preparing image')
     const image = await preprocessImage(file)
     onProgress?.(0.14, 'Image ready')
+    const slot = await this.acquireSlot()
+    slot.listener = onProgress
 
     try {
-      const worker = await this.getWorker()
+      const worker = await this.getWorker(slot)
       const result = await worker.recognize(
         image,
         {},
@@ -84,30 +105,50 @@ export class BrowserOcrService implements OcrEngine {
         durationMs: performance.now() - startedAt,
       }
     } finally {
-      this.listener = undefined
+      slot.listener = undefined
+      this.releaseSlot(slot)
     }
   }
 
   async terminate(): Promise<void> {
-    if (!this.workerPromise) return
-    const worker = await this.workerPromise
-    await worker.terminate()
-    this.workerPromise = undefined
+    await Promise.all(
+      this.slots.map(async (slot) => {
+        if (!slot.workerPromise) return
+        const worker = await slot.workerPromise
+        await worker.terminate()
+        slot.workerPromise = undefined
+      }),
+    )
   }
 
-  private getWorker(): Promise<Worker> {
-    if (!this.workerPromise) {
+  private acquireSlot(): Promise<WorkerSlot> {
+    const available = this.slots.find((slot) => !slot.busy)
+    if (available) {
+      available.busy = true
+      return Promise.resolve(available)
+    }
+    return new Promise((resolve) => this.waiters.push(resolve))
+  }
+
+  private releaseSlot(slot: WorkerSlot): void {
+    const next = this.waiters.shift()
+    if (next) next(slot)
+    else slot.busy = false
+  }
+
+  private getWorker(slot: WorkerSlot): Promise<Worker> {
+    if (!slot.workerPromise) {
       const assetRoot = `${import.meta.env.BASE_URL}ocr`
-      this.workerPromise = createWorker('eng', OEM.LSTM_ONLY, {
+      slot.workerPromise = createWorker('eng', OEM.LSTM_ONLY, {
         workerPath: `${assetRoot}/worker.min.js`,
         corePath: `${assetRoot}/tesseract-core-lstm.wasm.js`,
         langPath: assetRoot,
         gzip: true,
         logger: ({ status, progress }) => {
           if (status === 'recognizing text') {
-            this.listener?.(0.18 + progress * 0.8, readableStatus(status))
+            slot.listener?.(0.18 + progress * 0.8, readableStatus(status))
           } else {
-            this.listener?.(
+            slot.listener?.(
               Math.min(0.16, progress * 0.16),
               readableStatus(status),
             )
@@ -122,11 +163,11 @@ export class BrowserOcrService implements OcrEngine {
           return worker
         })
         .catch((error: unknown) => {
-          this.workerPromise = undefined
+          slot.workerPromise = undefined
           throw error
         })
     }
-    return this.workerPromise
+    return slot.workerPromise
   }
 }
 

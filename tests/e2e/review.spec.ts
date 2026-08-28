@@ -120,3 +120,52 @@ test('layout remains usable on a narrow viewport', async ({ page }) => {
   ).toBeVisible()
   await expect(page.getByText('Your images stay on this device')).toBeVisible()
 })
+
+test('unevenly lit angled photo retains reviewable evidence', async ({
+  page,
+}) => {
+  await page.goto('./')
+  await page.getByRole('button', { name: 'Try photo challenge' }).click()
+  await expect(page.getByLabel('Brand name')).toHaveValue('OLD TOM DISTILLERY')
+  await page.getByRole('button', { name: 'Analyze label' }).click()
+
+  await expect(page.getByText('Manual review remains')).toBeVisible({
+    timeout: 60_000,
+  })
+  for (const label of [
+    'Brand name',
+    'Class / type',
+    'Alcohol by volume',
+    'Net contents',
+    'Name & address statement',
+  ]) {
+    await expect(
+      page
+        .locator('.check-result')
+        .filter({ hasText: label })
+        .getByText('Pass'),
+    ).toBeVisible()
+  }
+  const metrics = (await page.locator('.ocr-metrics').innerText()).replace(
+    /\n/g,
+    ' · ',
+  )
+  console.log(`CHALLENGE_OCR_METRICS: ${metrics}`)
+})
+
+test('local worker pool analyzes two labels concurrently', async ({ page }) => {
+  await page.goto('./')
+  await expect(page.getByText(/OCR ready · 2 labels at a time/)).toBeVisible({
+    timeout: 30_000,
+  })
+  await page.getByRole('button', { name: 'Try sample label' }).click()
+  await page.getByRole('button', { name: 'Try sample label' }).click()
+  const startedAt = Date.now()
+  await page.getByRole('button', { name: 'Analyze 2 labels' }).click()
+
+  await expect(page.locator('.review-card-processing')).toHaveCount(2)
+  await expect(page.getByText('Manual review remains')).toHaveCount(2, {
+    timeout: 60_000,
+  })
+  console.log(`TWO_LABEL_BATCH_MS: ${Date.now() - startedAt}`)
+})

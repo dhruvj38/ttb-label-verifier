@@ -140,7 +140,10 @@ describe('App', () => {
     await completeFields(user)
 
     expect(screen.queryByLabelText('Country of origin')).not.toBeInTheDocument()
-    await user.selectOptions(screen.getByLabelText('Product origin'), 'imported')
+    await user.selectOptions(
+      screen.getByLabelText('Product origin'),
+      'imported',
+    )
     expect(screen.getByLabelText('Country of origin')).toBeRequired()
     expect(screen.getByRole('button', { name: 'Analyze label' })).toBeDisabled()
     await user.type(screen.getByLabelText('Country of origin'), 'France')
